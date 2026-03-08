@@ -77,9 +77,8 @@ const OutputPanel = ({ artifacts, briefData, messages = [], onSelectPiste, onApp
   const galleryAssets: ProductionAsset[] = galleryArtifact?.metadata?.production_assets || [];
   const hasCanvasTab = galleryAssets.length > 0;
 
-  // Show live brief during commercial phase when no formal brief exists yet
-  const isCommercialPhase = currentStep === "commercial";
-  const showLiveBrief = isCommercialPhase && !briefData && messages.length > 0;
+  // Show live brief (client brief) — always available when there are messages
+  const showLiveBrief = messages.length > 0;
 
   const [activeTab, setActiveTab] = useState<"assets" | "canvas" | "live-brief" | number>(
     showLiveBrief ? "live-brief" : hasAssetsTab ? "assets" : 0
@@ -150,7 +149,8 @@ const OutputPanel = ({ artifacts, briefData, messages = [], onSelectPiste, onApp
   }
 
   const labels: Record<string, string> = {
-    creative_brief: "Brief",
+    creative_brief: "Brief Créa",
+    client_brief: "Brief Client",
     dc_presentation: "Pistes DC",
     dc_copy_result: "Copy",
     ppm_presentation: "PPM",
@@ -235,7 +235,7 @@ const OutputPanel = ({ artifacts, briefData, messages = [], onSelectPiste, onApp
                 }`}
               >
                 <FileText className="h-3 w-3" />
-                Brief Live
+                Brief Client
               </button>
             )}
             {hasAssetsTab && (
