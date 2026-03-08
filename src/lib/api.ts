@@ -206,7 +206,7 @@ export async function updateBrief(projectId: string, briefData: Record<string, u
 
 // PPM
 export async function getPPM(projectId: string) {
-  return request<any>(`/projects/${projectId}/ppm`);
+  return request<any>(`/projects/${projectId}/ppm`, { silent404: true });
 }
 
 export async function approvePPMGate(projectId: string, action: "approve" | "revision", feedback: string = "") {

@@ -9,6 +9,7 @@ import {
   getProjectStatus,
   getProjectConversations,
   getBrief,
+  getPPM,
   sendMessageSSE,
   approveValidation,
   rejectValidation,
@@ -73,6 +74,20 @@ const ProjectPage = () => {
         ]);
         if (status) setProjectStatus(status);
         getBrief(id).then(setBriefData).catch(() => {});
+        // Fetch PPM data if available and inject as artifact
+        getPPM(id).then((ppmData) => {
+          if (ppmData) {
+            setArtifacts((prev) => {
+              // Don't duplicate if already present
+              if (prev.some((a) => a.metadata?.type === "ppm_presentation")) return prev;
+              return [...prev, {
+                role: "agent",
+                content: "",
+                metadata: { type: "ppm_presentation", ...ppmData },
+              }];
+            });
+          }
+        }).catch(() => {});
         loadConversationsList();
 
         const currentStep = status?.current_step || project.supervisor_phase || "commercial";
@@ -159,6 +174,25 @@ const ProjectPage = () => {
         if (id) {
           getProjectStatus(id).then(setProjectStatus).catch(() => {});
           getBrief(id).then(setBriefData).catch(() => {});
+          getPPM(id).then((ppmData) => {
+            if (ppmData) {
+              setArtifacts((prev) => {
+                const idx = prev.findIndex((a) => a.metadata?.type === "ppm_presentation");
+                const newArtifact: ChatMessage = {
+                  role: "agent",
+                  content: "",
+                  metadata: { type: "ppm_presentation", ...ppmData },
+                };
+                if (idx >= 0) {
+                  // Replace with fresh data
+                  const updated = [...prev];
+                  updated[idx] = newArtifact;
+                  return updated;
+                }
+                return [...prev, newArtifact];
+              });
+            }
+          }).catch(() => {});
         }
       },
       (label) => setThinking(label)
