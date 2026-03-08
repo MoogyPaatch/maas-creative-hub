@@ -235,7 +235,7 @@ const OutputPanel = ({ artifacts, briefData, messages = [], onSelectPiste, onApp
                 }`}
               >
                 <FileText className="h-3 w-3" />
-                Brief Live
+                Brief Client
               </button>
             )}
             {hasAssetsTab && (
