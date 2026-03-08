@@ -12,7 +12,7 @@ import {
   Play,
   Pause,
   Package,
-} from "lucide-react";
+  PenTool,
 import type { MessageMetadata, ProductionAsset } from "@/types";
 
 interface Props {
