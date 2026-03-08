@@ -60,4 +60,4 @@ const ChatMessageBubble = ({ message, isLast, onQuickReply }: Props) => {
   );
 };
 
-export default ChatMessage;
+export default ChatMessageBubble;
