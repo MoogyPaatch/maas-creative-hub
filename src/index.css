@@ -168,3 +168,12 @@
     margin-top: 1rem;
   }
 }
+
+@keyframes brief-field-flash {
+  0% { background-color: hsl(var(--success) / 0.2); }
+  100% { background-color: transparent; }
+}
+
+.animate-brief-field-flash {
+  animation: brief-field-flash 1.2s ease-out;
+}
