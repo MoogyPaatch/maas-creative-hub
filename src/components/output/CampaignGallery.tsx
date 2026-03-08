@@ -17,6 +17,7 @@ import type { MessageMetadata, ProductionAsset } from "@/types";
 
 interface Props {
   metadata: MessageMetadata;
+  onOpenCanvas?: () => void;
 }
 
 const sectionIcons: Record<string, React.ElementType> = {
