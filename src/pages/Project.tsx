@@ -31,7 +31,7 @@ const ProjectPage = () => {
 
   // Initialize conversation
   useEffect(() => {
-    if (!id) return;
+    if (!id || !user) return;
 
     const isAgency = user?.role === "agency" || user?.role === "admin";
 
