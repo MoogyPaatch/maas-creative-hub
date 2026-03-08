@@ -261,7 +261,7 @@ const ProjectPage = () => {
             onSelectPiste={handleSelectPiste}
             onApprove={handleApprove}
             onReject={handleReject}
-            onBriefChange={handleBriefChange}
+            currentStep={projectStatus?.current_step || "commercial"}
           />
         </div>
       </div>
