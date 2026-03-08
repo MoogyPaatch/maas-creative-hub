@@ -248,7 +248,7 @@ const LiveBriefPreview = ({ messages, onBriefChange }: Props) => {
                     ) : (
                       <div
                         className="mt-0.5 cursor-text flex items-center gap-2"
-                        onClick={() => setEditingField(field.key)}
+                        onClick={() => setEditingField(String(field.key))}
                       >
                         {isFilled ? (
                           field.type === "tags" && Array.isArray(val) ? (
