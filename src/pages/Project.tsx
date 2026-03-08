@@ -8,7 +8,6 @@ import {
   getProject,
   getProjectStatus,
   getBrief,
-  updateBrief,
   sendMessageSSE,
   approveValidation,
   rejectValidation,
