@@ -132,6 +132,7 @@ const OutputPanel = ({ artifacts, briefData, onSelectPiste, onApprove, onReject,
     ppm_presentation: "PPM",
     campaign_gallery: "Campagne",
     validation_required: "Validation",
+    delivery: "Livraison",
   };
 
   const assetCount = brandAssets.length;
