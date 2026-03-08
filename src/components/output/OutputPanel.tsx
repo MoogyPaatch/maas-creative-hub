@@ -5,9 +5,10 @@ import DCPresentation from "./DCPresentation";
 import DCCopyResult from "./DCCopyResult";
 import PPMPresentation from "./PPMPresentation";
 import CampaignGallery from "./CampaignGallery";
+import CreativeCanvas from "./CreativeCanvas";
 import ValidationPanel from "./ValidationPanel";
 import BrandAssetsPanel from "./BrandAssetsPanel";
-import type { ChatMessage, BrandAsset, BrandAssetCategory } from "@/types";
+import type { ChatMessage, BrandAsset, BrandAssetCategory, ProductionAsset } from "@/types";
 import { motion } from "framer-motion";
 import { Sparkles, FolderOpen } from "lucide-react";
 
