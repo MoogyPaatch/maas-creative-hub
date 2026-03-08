@@ -8,9 +8,10 @@ import CampaignGallery from "./CampaignGallery";
 import CreativeCanvas from "./CreativeCanvas";
 import ValidationPanel from "./ValidationPanel";
 import BrandAssetsPanel from "./BrandAssetsPanel";
+import DeliveryPanel from "./DeliveryPanel";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import type { ChatMessage, BrandAsset, BrandAssetCategory, ProductionAsset, BriefData } from "@/types";
-import { Sparkles, FolderOpen, PenTool, FileText, Palette, Film, Rocket } from "lucide-react";
+import { Sparkles, FolderOpen, PenTool, FileText, Palette, Film, Rocket, Package } from "lucide-react";
 
 interface Props {
   artifacts: ChatMessage[];
@@ -131,6 +132,7 @@ const OutputPanel = ({ artifacts, briefData, onSelectPiste, onApprove, onReject,
     ppm_presentation: "PPM",
     campaign_gallery: "Campagne",
     validation_required: "Validation",
+    delivery: "Livraison",
   };
 
   const assetCount = brandAssets.length;
@@ -178,6 +180,15 @@ const OutputPanel = ({ artifacts, briefData, onSelectPiste, onApprove, onReject,
             {active?.type === "validation_required" && active.metadata && onApprove && onReject && (
               <motion.div key={`validation-${activeIndex}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="flex h-full items-center justify-center p-8">
                 <ValidationPanel gate={active.metadata.gate || ""} validationId={active.metadata.validation_id || ""} content={active.metadata.content || ""} onApprove={onApprove} onReject={onReject} />
+              </motion.div>
+            )}
+            {active?.type === "delivery" && active.metadata && (
+              <motion.div key={`delivery-${activeIndex}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="h-full">
+                <DeliveryPanel
+                  zipUrl={active.metadata.zip_url}
+                  assets={active.metadata.production_assets || []}
+                  campaignTitle={active.metadata.campaign_title}
+                />
               </motion.div>
             )}
           </AnimatePresence>
