@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   createConversation,
+  getConversation,
   getProject,
   getProjectStatus,
   getBrief,
@@ -39,51 +40,45 @@ const ProjectPage = () => {
 
     const init = async () => {
       try {
-        // Try to get existing project status and brief
-        const status = await getProjectStatus(id).catch(() => null);
+        const [status, project] = await Promise.all([
+          getProjectStatus(id).catch(() => null),
+          getProject(id),
+        ]);
         if (status) setProjectStatus(status);
         getBrief(id).then(setBriefData).catch(() => {});
 
-        // Get project to find latest conversation
-        const project = await getProject(id);
-        if (project.latest_conversation_id) {
-          // Create conversation to get messages
-          const conv = await createConversation(id, isAgency, isAgency ? (project.supervisor_phase || "commercial") : null);
-          setConversationId(conv.conversation_id);
-          
-          // Map existing messages
-          const existingMessages: ChatMessage[] = (conv.messages || []).map((m: any) => ({
-            role: m.role === "user" ? "user" : "agent",
-            content: m.content || "",
-            quickReplies: m.quick_replies?.map((qr: any) => ({ id: qr.id, label: qr.label })),
-            metadata: m.metadata,
-          }));
-          setMessages(existingMessages);
+        const currentStep = status?.current_step || project.supervisor_phase || "commercial";
+        const targetAgent = isAgency ? currentStep : currentStep;
 
-          // Artifacts
-          const existingArtifacts: ChatMessage[] = (conv.artifacts || []).map((a: any) => ({
-            role: "agent",
-            content: a.content || "",
-            metadata: a.metadata,
-          }));
-          setArtifacts(existingArtifacts);
-        } else {
-          // New conversation
-          const conv = await createConversation(id, isAgency, isAgency ? "commercial" : null);
-          setConversationId(conv.conversation_id);
-          const existingMessages: ChatMessage[] = (conv.messages || []).map((m: any) => ({
-            role: m.role === "user" ? "user" : "agent",
-            content: m.content || "",
-            quickReplies: m.quick_replies?.map((qr: any) => ({ id: qr.id, label: qr.label })),
-            metadata: m.metadata,
-          }));
-          setMessages(existingMessages);
+        // Try to load existing conversation first
+        let conv: any = null;
+        if (project.latest_conversation_id) {
+          conv = await getConversation(project.latest_conversation_id).catch(() => null);
         }
+        // Fallback: create new conversation with correct target_agent
+        if (!conv) {
+          conv = await createConversation(id, isAgency, targetAgent);
+        }
+
+        setConversationId(conv.conversation_id);
+        const existingMessages: ChatMessage[] = (conv.messages || []).map((m: any) => ({
+          role: m.role === "user" ? "user" : "agent",
+          content: m.content || "",
+          quickReplies: m.quick_replies?.map((qr: any) => ({ id: qr.id, label: qr.label })),
+          metadata: m.metadata,
+        }));
+        setMessages(existingMessages);
+
+        const existingArtifacts: ChatMessage[] = (conv.artifacts || []).map((a: any) => ({
+          role: "agent",
+          content: a.content || "",
+          metadata: a.metadata,
+        }));
+        setArtifacts(existingArtifacts);
       } catch (err) {
         console.error("Init error:", err);
-        // Fallback: create new conversation
         try {
-          const conv = await createConversation(id, isAgency, isAgency ? "commercial" : null);
+          const conv = await createConversation(id, isAgency, "commercial");
           setConversationId(conv.conversation_id);
           const existingMessages: ChatMessage[] = (conv.messages || []).map((m: any) => ({
             role: m.role === "user" ? "user" : "agent",
