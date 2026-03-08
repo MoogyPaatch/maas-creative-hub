@@ -194,7 +194,7 @@ export async function rejectValidation(id: string, feedback: string) {
 
 // Brief
 export async function getBrief(projectId: string) {
-  return request<any>(`/projects/${projectId}/brief`);
+  return request<any>(`/projects/${projectId}/brief`, { silent404: true });
 }
 
 export async function updateBrief(projectId: string, briefData: Record<string, unknown>) {
