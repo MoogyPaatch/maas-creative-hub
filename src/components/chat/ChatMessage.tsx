@@ -3,7 +3,7 @@ import type { ChatMessage as ChatMessageType } from "@/types";
 import ReactMarkdown from "react-markdown";
 
 interface Props {
-  message: ChatMessage;
+  message: ChatMessageType;
   isLast: boolean;
   onQuickReply?: (id: string) => void;
 }
