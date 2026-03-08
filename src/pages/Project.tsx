@@ -14,6 +14,7 @@ import {
   approveValidation,
   rejectValidation,
   uploadFile,
+  validateClientBrief,
 } from "@/lib/api";
 import { parseSSEStream } from "@/lib/sse";
 import ChatPanel from "@/components/chat/ChatPanel";
@@ -21,10 +22,16 @@ import OutputPanel from "@/components/output/OutputPanel";
 import WorkflowStepper from "@/components/layout/WorkflowStepper";
 import ConversationHistory from "@/components/chat/ConversationHistory";
 import { AnimatePresence } from "framer-motion";
-import type { ChatMessage, ProjectStatus, ConversationSummary } from "@/types";
+import type { ChatMessage, ProjectStatus, ConversationSummary, ClientBriefDraft } from "@/types";
 import { ArrowLeft, Loader2, History, Shield } from "lucide-react";
 import logoBlack from "@/assets/logo-marcel-black.png";
 import logoWhite from "@/assets/logo-marcel-white.png";
+
+const EMPTY_BRIEF_DRAFT: ClientBriefDraft = {
+  brand: null, product: null, objective: null, target: null, tone: null,
+  formats: null, promise: null, reason_to_believe: null,
+  creative_references: null, constraints: null, additional_context: null,
+};
 
 const ProjectPage = () => {
   const { id } = useParams<{ id: string }>();
@@ -46,7 +53,55 @@ const ProjectPage = () => {
   const [loading, setLoading] = useState(true);
   const [mobileTab, setMobileTab] = useState<"chat" | "output">("chat");
 
+  // Client brief draft state (SSE-driven)
+  const [clientBriefDraft, setClientBriefDraft] = useState<ClientBriefDraft>({ ...EMPTY_BRIEF_DRAFT });
+  const [changedBriefFields, setChangedBriefFields] = useState<Set<string>>(new Set());
+  const changedFieldsTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+
   const pollRef = useRef<ReturnType<typeof setInterval>>();
+
+  // Handle SSE brief draft updates (null fields don't overwrite)
+  const handleBriefDraftUpdate = useCallback((draft: Partial<ClientBriefDraft>) => {
+    const newChanged = new Set<string>();
+    setClientBriefDraft((prev) => {
+      const next = { ...prev };
+      for (const [key, value] of Object.entries(draft)) {
+        if (value !== null && value !== undefined) {
+          if (next[key as keyof ClientBriefDraft] !== value) {
+            newChanged.add(key);
+          }
+          (next as any)[key] = value;
+        }
+      }
+      return next;
+    });
+
+    if (newChanged.size > 0) {
+      setChangedBriefFields(newChanged);
+      clearTimeout(changedFieldsTimeoutRef.current);
+      changedFieldsTimeoutRef.current = setTimeout(() => setChangedBriefFields(new Set()), 1200);
+    }
+  }, []);
+
+  // Manual field edit
+  const handleClientBriefFieldChange = useCallback((key: keyof ClientBriefDraft, value: string) => {
+    setClientBriefDraft((prev) => ({ ...prev, [key]: value || null }));
+  }, []);
+
+  // Validate brief
+  const handleValidateClientBrief = useCallback(async () => {
+    if (!conversationId) return;
+    try {
+      const body: Record<string, string> = {};
+      for (const [k, v] of Object.entries(clientBriefDraft)) {
+        if (v) body[k] = v;
+      }
+      const stream = await validateClientBrief(conversationId, body);
+      if (stream) await handleSSEStream(stream);
+    } catch {
+      toast.error("Erreur lors de la validation du brief");
+    }
+  }, [conversationId, clientBriefDraft]);
 
   const loadConversationsList = useCallback(async () => {
     if (!id) return;
@@ -74,17 +129,11 @@ const ProjectPage = () => {
         ]);
         if (status) setProjectStatus(status);
         getBrief(id).then(setBriefData).catch(() => {});
-        // Fetch PPM data if available and inject as artifact
         getPPM(id).then((ppmData) => {
           if (ppmData) {
             setArtifacts((prev) => {
-              // Don't duplicate if already present
               if (prev.some((a) => a.metadata?.type === "ppm_presentation")) return prev;
-              return [...prev, {
-                role: "agent",
-                content: "",
-                metadata: { type: "ppm_presentation", ...ppmData },
-              }];
+              return [...prev, { role: "agent", content: "", metadata: { type: "ppm_presentation", ...ppmData } }];
             });
           }
         }).catch(() => {});
@@ -110,12 +159,22 @@ const ProjectPage = () => {
         }));
         setMessages(existingMessages);
 
+        // Restore brief draft from conversation messages
+        for (const m of existingMessages) {
+          if (m.metadata?.type === "client_brief_draft" && m.metadata?.brief_draft) {
+            handleBriefDraftUpdate(m.metadata.brief_draft);
+          }
+        }
+
         const existingArtifacts: ChatMessage[] = (conv.artifacts || []).map((a: any) => ({
-          role: "agent",
-          content: a.content || "",
-          metadata: a.metadata,
+          role: "agent", content: a.content || "", metadata: a.metadata,
         }));
         setArtifacts(existingArtifacts);
+
+        // Also check if conv has brief_client_draft
+        if (conv.brief_client_draft) {
+          handleBriefDraftUpdate(conv.brief_client_draft);
+        }
       } catch (err) {
         console.error("Init error:", err);
         toast.error("Erreur de chargement du projet");
@@ -163,7 +222,7 @@ const ProjectPage = () => {
       (msg) => {
         setThinking(null);
         setMessages((prev) => [...prev, msg]);
-        if (msg.metadata?.type) {
+        if (msg.metadata?.type && msg.metadata.type !== "client_brief_draft" && msg.metadata.type !== "status_update") {
           setArtifacts((prev) => [...prev, msg]);
           setMobileTab("output");
         }
@@ -178,13 +237,8 @@ const ProjectPage = () => {
             if (ppmData) {
               setArtifacts((prev) => {
                 const idx = prev.findIndex((a) => a.metadata?.type === "ppm_presentation");
-                const newArtifact: ChatMessage = {
-                  role: "agent",
-                  content: "",
-                  metadata: { type: "ppm_presentation", ...ppmData },
-                };
+                const newArtifact: ChatMessage = { role: "agent", content: "", metadata: { type: "ppm_presentation", ...ppmData } };
                 if (idx >= 0) {
-                  // Replace with fresh data
                   const updated = [...prev];
                   updated[idx] = newArtifact;
                   return updated;
@@ -195,9 +249,10 @@ const ProjectPage = () => {
           }).catch(() => {});
         }
       },
-      (label) => setThinking(label)
+      (label) => setThinking(label),
+      handleBriefDraftUpdate
     );
-  }, [id]);
+  }, [id, handleBriefDraftUpdate]);
 
   const handleSendMessage = useCallback(async (text: string) => {
     if (!conversationId) return;
@@ -288,22 +343,29 @@ const ProjectPage = () => {
     try {
       const conv = await getConversation(convId);
       setConversationId(conv.conversation_id);
-      setMessages(
-        (conv.messages || []).map((m: any) => ({
-          role: m.role === "user" ? "user" : "agent",
-          content: m.content || "",
-          quickReplies: m.quick_replies?.map((qr: any) => ({ id: qr.id, label: qr.label })),
-          metadata: m.metadata,
-        }))
-      );
+      const msgs = (conv.messages || []).map((m: any) => ({
+        role: m.role === "user" ? "user" : "agent",
+        content: m.content || "",
+        quickReplies: m.quick_replies?.map((qr: any) => ({ id: qr.id, label: qr.label })),
+        metadata: m.metadata,
+      }));
+      setMessages(msgs);
       setArtifacts(
         (conv.artifacts || []).map((a: any) => ({ role: "agent", content: a.content || "", metadata: a.metadata }))
       );
+      // Restore brief draft
+      setClientBriefDraft({ ...EMPTY_BRIEF_DRAFT });
+      for (const m of msgs) {
+        if (m.metadata?.type === "client_brief_draft" && m.metadata?.brief_draft) {
+          handleBriefDraftUpdate(m.metadata.brief_draft);
+        }
+      }
+      if (conv.brief_client_draft) handleBriefDraftUpdate(conv.brief_client_draft);
       setShowHistory(false);
     } catch {
       toast.error("Impossible de charger cette conversation");
     }
-  }, []);
+  }, [handleBriefDraftUpdate]);
 
   const hasPendingValidation = projectStatus?.pending_validations?.some((v) => v.status === "pending");
 
@@ -314,6 +376,22 @@ const ProjectPage = () => {
       </div>
     );
   }
+
+  const outputPanelProps = {
+    artifacts,
+    briefData,
+    messages,
+    clientBriefDraft,
+    changedBriefFields,
+    onClientBriefFieldChange: handleClientBriefFieldChange,
+    onValidateClientBrief: handleValidateClientBrief,
+    onSelectPiste: handleSelectPiste,
+    onApprove: handleApprove,
+    onReject: handleReject,
+    currentStep: projectStatus?.current_step || "commercial",
+    isClientView: isClient,
+    isStreaming,
+  };
 
   return (
     <div className="flex h-screen flex-col bg-background">
@@ -393,16 +471,7 @@ const ProjectPage = () => {
           />
         </div>
         <div className="relative flex-1">
-          <OutputPanel
-            artifacts={artifacts}
-            briefData={briefData}
-            messages={messages}
-            onSelectPiste={handleSelectPiste}
-            onApprove={handleApprove}
-            onReject={handleReject}
-            currentStep={projectStatus?.current_step || "commercial"}
-            isClientView={isClient}
-          />
+          <OutputPanel {...outputPanelProps} />
         </div>
       </div>
 
@@ -440,16 +509,7 @@ const ProjectPage = () => {
               isStreaming={isStreaming}
             />
           ) : (
-            <OutputPanel
-              artifacts={artifacts}
-              briefData={briefData}
-              messages={messages}
-              onSelectPiste={handleSelectPiste}
-              onApprove={handleApprove}
-              onReject={handleReject}
-              currentStep={projectStatus?.current_step || "commercial"}
-              isClientView={isClient}
-            />
+            <OutputPanel {...outputPanelProps} />
           )}
         </div>
       </div>
