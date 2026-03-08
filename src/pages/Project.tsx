@@ -28,6 +28,7 @@ const ProjectPage = () => {
   const [thinking, setThinking] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [projectStatus, setProjectStatus] = useState<ProjectStatus | null>(null);
+  const [briefData, setBriefData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   // Initialize conversation
