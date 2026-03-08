@@ -120,9 +120,10 @@ const ProjectPage = () => {
       () => {
         setThinking(null);
         setIsStreaming(false);
-        // Refresh project status
+        // Refresh project status and brief
         if (id) {
           getProjectStatus(id).then(setProjectStatus).catch(() => {});
+          getBrief(id).then(setBriefData).catch(() => {});
         }
       },
       (label) => setThinking(label)
