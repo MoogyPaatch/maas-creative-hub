@@ -11,25 +11,61 @@ import { Sparkles } from "lucide-react";
 
 interface Props {
   artifacts: ChatMessage[];
+  briefData?: any;
   onSelectPiste?: (pisteId: string) => void;
   onApprove?: (id: string, feedback: string | null) => void;
   onReject?: (id: string, feedback: string) => void;
 }
 
-const OutputPanel = ({ artifacts, onSelectPiste, onApprove, onReject }: Props) => {
-  const typedArtifacts = artifacts.filter((a) => a.metadata?.type);
-  const [activeIndex, setActiveIndex] = useState(typedArtifacts.length - 1);
-
-  // Auto-select latest artifact when new ones arrive
-  useEffect(() => {
-    if (typedArtifacts.length > 0) {
-      setActiveIndex(typedArtifacts.length - 1);
+function briefToMarkdown(brief: any): string {
+  if (!brief) return "";
+  const lines: string[] = [];
+  if (brief.brand) lines.push(`## Marque\n${brief.brand}`);
+  if (brief.product) lines.push(`## Produit\n${brief.product}`);
+  if (brief.objective) lines.push(`## Objectif\n${brief.objective}`);
+  if (brief.budget) lines.push(`## Budget\n${brief.budget}`);
+  if (brief.channels?.length) lines.push(`## Canaux\n${brief.channels.map((c: string) => `- ${c}`).join("\n")}`);
+  if (brief.tone?.length) lines.push(`## Ton\n${brief.tone.join(", ")}`);
+  if (brief.key_message) lines.push(`## Message clé\n> ${brief.key_message}`);
+  if (brief.kpis?.length) lines.push(`## KPIs\n${brief.kpis.map((k: string) => `- ${k}`).join("\n")}`);
+  if (brief.timing) lines.push(`## Timing\n${brief.timing}`);
+  // Fallback: render any other keys
+  const known = ["brand", "product", "objective", "budget", "channels", "tone", "key_message", "kpis", "timing"];
+  Object.entries(brief).forEach(([key, val]) => {
+    if (!known.includes(key) && val) {
+      lines.push(`## ${key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}\n${typeof val === "string" ? val : JSON.stringify(val, null, 2)}`);
     }
-  }, [typedArtifacts.length]);
+  });
+  return lines.join("\n\n");
+}
 
-  const activeArtifact = typedArtifacts[activeIndex] || null;
+const OutputPanel = ({ artifacts, briefData, onSelectPiste, onApprove, onReject }: Props) => {
+  const typedArtifacts = artifacts.filter((a) => a.metadata?.type);
+  
+  // Build display items: briefData + typed artifacts from SSE
+  const displayItems: { type: string; content?: string; metadata?: any }[] = [];
+  
+  if (briefData) {
+    displayItems.push({ type: "creative_brief", content: briefToMarkdown(briefData) });
+  }
+  
+  typedArtifacts.forEach((a) => {
+    // Skip SSE brief artifacts if we have briefData from API
+    if (a.metadata?.type === "creative_brief" && briefData) return;
+    displayItems.push({ type: a.metadata!.type, content: a.metadata?.content, metadata: a.metadata });
+  });
 
-  if (!activeArtifact?.metadata) {
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  useEffect(() => {
+    if (displayItems.length > 0) {
+      setActiveIndex(displayItems.length - 1);
+    }
+  }, [displayItems.length]);
+
+  const active = displayItems[activeIndex] || null;
+
+  if (!active) {
     return (
       <div className="flex h-full flex-col items-center justify-center bg-background p-8">
         <motion.div
@@ -49,8 +85,6 @@ const OutputPanel = ({ artifacts, onSelectPiste, onApprove, onReject }: Props) =
     );
   }
 
-  const { metadata } = activeArtifact;
-
   const labels: Record<string, string> = {
     creative_brief: "Brief",
     dc_presentation: "Pistes DC",
@@ -61,27 +95,26 @@ const OutputPanel = ({ artifacts, onSelectPiste, onApprove, onReject }: Props) =
 
   return (
     <div className="flex h-full flex-col bg-background">
-      {/* Artifact content */}
       <div className="flex-1 overflow-hidden">
         <AnimatePresence mode="wait">
-          {metadata.type === "creative_brief" && metadata.content && (
-            <CreativeBrief key={`brief-${activeIndex}`} content={metadata.content} />
+          {active.type === "creative_brief" && active.content && (
+            <CreativeBrief key={`brief-${activeIndex}`} content={active.content} />
           )}
-          {metadata.type === "dc_presentation" && (
-            <DCPresentation key={`dc-${activeIndex}`} metadata={metadata} onSelectPiste={onSelectPiste} />
+          {active.type === "dc_presentation" && active.metadata && (
+            <DCPresentation key={`dc-${activeIndex}`} metadata={active.metadata} onSelectPiste={onSelectPiste} />
           )}
-          {metadata.type === "dc_copy_result" && (
-            <DCCopyResult key={`copy-${activeIndex}`} metadata={metadata} />
+          {active.type === "dc_copy_result" && active.metadata && (
+            <DCCopyResult key={`copy-${activeIndex}`} metadata={active.metadata} />
           )}
-          {metadata.type === "ppm_presentation" && (
-            <PPMPresentation key={`ppm-${activeIndex}`} metadata={metadata} />
+          {active.type === "ppm_presentation" && active.metadata && (
+            <PPMPresentation key={`ppm-${activeIndex}`} metadata={active.metadata} />
           )}
-          {metadata.type === "validation_required" && onApprove && onReject && (
+          {active.type === "validation_required" && active.metadata && onApprove && onReject && (
             <div key={`validation-${activeIndex}`} className="flex h-full items-center justify-center p-8">
               <ValidationPanel
-                gate={metadata.gate || ""}
-                validationId={metadata.validation_id || ""}
-                content={metadata.content || ""}
+                gate={active.metadata.gate || ""}
+                validationId={active.metadata.validation_id || ""}
+                content={active.metadata.content || ""}
                 onApprove={onApprove}
                 onReject={onReject}
               />
@@ -90,11 +123,10 @@ const OutputPanel = ({ artifacts, onSelectPiste, onApprove, onReject }: Props) =
         </AnimatePresence>
       </div>
 
-      {/* Clickable artifact tabs */}
-      {typedArtifacts.length > 1 && (
+      {displayItems.length > 1 && (
         <div className="flex justify-center border-t border-border bg-card/50 px-4 py-3 backdrop-blur-sm">
           <div className="flex gap-1.5 rounded-full border border-border bg-card px-2 py-1">
-            {typedArtifacts.map((a, i) => (
+            {displayItems.map((item, i) => (
               <button
                 key={i}
                 onClick={() => setActiveIndex(i)}
@@ -104,7 +136,7 @@ const OutputPanel = ({ artifacts, onSelectPiste, onApprove, onReject }: Props) =
                     : "text-muted-foreground hover:text-foreground hover:bg-muted"
                 }`}
               >
-                {labels[a.metadata!.type] || a.metadata!.type}
+                {labels[item.type] || item.type}
               </button>
             ))}
           </div>

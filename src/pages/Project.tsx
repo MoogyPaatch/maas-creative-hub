@@ -5,6 +5,7 @@ import {
   createConversation,
   getProject,
   getProjectStatus,
+  getBrief,
   sendMessageSSE,
   approveValidation,
   rejectValidation,
@@ -27,6 +28,7 @@ const ProjectPage = () => {
   const [thinking, setThinking] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [projectStatus, setProjectStatus] = useState<ProjectStatus | null>(null);
+  const [briefData, setBriefData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   // Initialize conversation
@@ -37,9 +39,10 @@ const ProjectPage = () => {
 
     const init = async () => {
       try {
-        // Try to get existing project status
+        // Try to get existing project status and brief
         const status = await getProjectStatus(id).catch(() => null);
         if (status) setProjectStatus(status);
+        getBrief(id).then(setBriefData).catch(() => {});
 
         // Get project to find latest conversation
         const project = await getProject(id);
@@ -118,9 +121,10 @@ const ProjectPage = () => {
       () => {
         setThinking(null);
         setIsStreaming(false);
-        // Refresh project status
+        // Refresh project status and brief
         if (id) {
           getProjectStatus(id).then(setProjectStatus).catch(() => {});
+          getBrief(id).then(setBriefData).catch(() => {});
         }
       },
       (label) => setThinking(label)
@@ -244,6 +248,7 @@ const ProjectPage = () => {
         <div className="relative flex-1">
           <OutputPanel
             artifacts={artifacts}
+            briefData={briefData}
             onSelectPiste={handleSelectPiste}
             onApprove={handleApprove}
             onReject={handleReject}

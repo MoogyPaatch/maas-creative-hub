@@ -127,6 +127,11 @@ export async function rejectValidation(id: string, feedback: string) {
   return res.body;
 }
 
+// Brief
+export async function getBrief(projectId: string) {
+  return request<any>(`/projects/${projectId}/brief`);
+}
+
 // PPM
 export async function getPPM(projectId: string) {
   return request<any>(`/projects/${projectId}/ppm`);
