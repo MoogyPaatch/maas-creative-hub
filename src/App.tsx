@@ -52,28 +52,24 @@ function AnimatedRoutes() {
   const location = useLocation();
   return (
     <AnimatePresence mode="wait">
-      <motion.div key={location.pathname} {...pageTransition} className="h-full">
-        <Routes location={location}>
-          <Route path="/" element={<Index />} />
-          <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
-          <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
-          <Route path="/project/:id" element={<ProtectedRoute><ProjectPage /></ProtectedRoute>} />
-          <Route path="/demo" element={<DemoPage />} />
-          <Route path="/demo-slides" element={<DemoSlides />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </motion.div>
+      <Routes location={location} key={location.pathname}>
+        <Route path="/" element={<Index />} />
+        <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+        <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
+        <Route path="/project/:id" element={<ProtectedRoute><ProjectPage /></ProtectedRoute>} />
+        <Route path="/demo" element={<DemoPage />} />
+        <Route path="/demo-slides" element={<DemoSlides />} />
+        <Route path="*" element={<NotFound />} />
+      </Routes>
     </AnimatePresence>
   );
 }
 
-const AppRoutes = () => {
-  return (
-    <AuthProvider>
-      <AnimatedRoutes />
-    </AuthProvider>
-  );
-};
+const AppRoutes = () => (
+  <AuthProvider>
+    <AnimatedRoutes />
+  </AuthProvider>
+);
 
 const App = () => (
   <ErrorBoundary>
