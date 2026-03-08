@@ -22,7 +22,7 @@ const CreativeBrief = ({ content }: Props) => (
           <p className="text-xs text-muted-foreground">Élaboré par le Planner Stratégique Marcel</p>
         </div>
       </div>
-      <div className="rounded-xl border border-border bg-card p-8 prose prose-sm max-w-none prose-headings:text-foreground prose-p:text-foreground prose-strong:text-foreground prose-li:text-foreground">
+      <div className="rounded-xl border border-border bg-card p-8 prose prose-sm max-w-none dark:prose-invert prose-headings:text-foreground prose-p:text-foreground prose-strong:text-foreground prose-li:text-foreground prose-a:text-primary">
         <ReactMarkdown>{content}</ReactMarkdown>
       </div>
     </div>

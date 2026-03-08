@@ -44,7 +44,10 @@ const Projects = () => {
       dc_visual: "Direction Créative",
       dc_copy: "Copywriting",
       ppm: "Pré-Production",
-      prod: "Production",
+      prod_image: "Production Image",
+      prod_video: "Production Vidéo",
+      prod_audio: "Production Audio",
+      delivered: "Livré",
     };
     return phase ? map[phase] || phase : "Nouveau";
   };
