@@ -250,6 +250,7 @@ const ProjectPage = () => {
             thinking={thinking}
             onSendMessage={handleSendMessage}
             onQuickReply={handleQuickReply}
+            onAttach={handleAttach}
             isStreaming={isStreaming}
           />
         </div>
