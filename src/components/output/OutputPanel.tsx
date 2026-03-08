@@ -150,7 +150,8 @@ const OutputPanel = ({ artifacts, briefData, messages = [], onSelectPiste, onApp
   }
 
   const labels: Record<string, string> = {
-    creative_brief: "Brief",
+    creative_brief: "Brief Créa",
+    client_brief: "Brief Client",
     dc_presentation: "Pistes DC",
     dc_copy_result: "Copy",
     ppm_presentation: "PPM",
