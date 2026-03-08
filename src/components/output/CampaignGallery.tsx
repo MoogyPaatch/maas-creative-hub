@@ -208,15 +208,26 @@ const CampaignGallery = ({ metadata, onOpenCanvas }: Props) => {
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">{stats.join(" · ")}</p>
           </div>
-          {metadata.zip_url && (
-            <a
-              href={metadata.zip_url}
-              className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm hover:bg-primary/90 transition"
-            >
-              <Package className="h-4 w-4" />
-              Tout télécharger
-            </a>
-          )}
+          <div className="flex items-center gap-2">
+            {onOpenCanvas && (
+              <button
+                onClick={onOpenCanvas}
+                className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground shadow-sm hover:bg-muted transition"
+              >
+                <PenTool className="h-4 w-4" />
+                Canevas
+              </button>
+            )}
+            {metadata.zip_url && (
+              <a
+                href={metadata.zip_url}
+                className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm hover:bg-primary/90 transition"
+              >
+                <Package className="h-4 w-4" />
+                Tout télécharger
+              </a>
+            )}
+          </div>
         </div>
       </motion.div>
 
