@@ -1,4 +1,4 @@
-const API_URL = "https://maas-backend-rmbomgmltq-ew.a.run.app/api";
+const API_URL = "/api";
 
 function getToken(): string | null {
   return localStorage.getItem("maas_token");
