@@ -1,13 +1,14 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Loader2 } from "lucide-react";
+import logoWhite from "@/assets/logo-marcel-white.png";
 
 const taglines = [
-  "L'intelligence créative, orchestrée par Marcel",
-  "Du brief à la campagne en quelques minutes",
-  "L'IA au service de la créativité audacieuse",
+  "Make things that change things.",
+  "L'audace créative, orchestrée par l'IA.",
+  "Du brief à la campagne, sans compromis.",
 ];
 
 const Login = () => {
@@ -19,23 +20,10 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [taglineIdx, setTaglineIdx] = useState(0);
 
-  // Mouse parallax
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [mouse, setMouse] = useState({ x: 0, y: 0 });
-
   useEffect(() => {
     const interval = setInterval(() => setTaglineIdx((i) => (i + 1) % taglines.length), 4000);
     return () => clearInterval(interval);
   }, []);
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    setMouse({
-      x: ((e.clientX - rect.left) / rect.width - 0.5) * 20,
-      y: ((e.clientY - rect.top) / rect.height - 0.5) * 20,
-    });
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,99 +40,107 @@ const Login = () => {
   };
 
   return (
-    <div
-      ref={containerRef}
-      onMouseMove={handleMouseMove}
-      className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background"
-    >
-      {/* Parallax gradient */}
-      <div
-        className="pointer-events-none absolute inset-0 animate-gradient-shift bg-gradient-to-br from-primary/8 via-background to-primary/12 transition-transform duration-300 ease-out"
-        style={{ transform: `translate(${mouse.x}px, ${mouse.y}px)` }}
-      />
-      <div
-        className="pointer-events-none absolute left-1/3 top-1/4 h-[500px] w-[500px] rounded-full bg-primary/6 blur-[100px] transition-transform duration-500"
-        style={{ transform: `translate(${mouse.x * 1.5}px, ${mouse.y * 1.5}px)` }}
-      />
-
-      <motion.div
-        initial={{ opacity: 0, y: 24 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: [0.25, 0.46, 0.45, 0.94] }}
-        className="relative z-10 w-full max-w-md px-6"
-      >
-        <div className="mb-10 text-center">
-          {/* Logo with animated glow */}
-          <motion.div
-            initial={{ scale: 0.8, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ type: "spring", stiffness: 200, damping: 15, delay: 0.15 }}
-            className="relative mx-auto mb-6 h-16 w-16"
-          >
-            <div className="absolute inset-0 rounded-2xl bg-primary blur-xl opacity-40 animate-pulse" style={{ animationDuration: "3s" }} />
-            <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-primary shadow-2xl shadow-primary/40">
-              <span className="text-2xl font-bold text-primary-foreground">M</span>
-            </div>
-          </motion.div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">MaaS</h1>
-          <p className="mt-2 text-sm text-muted-foreground">Marcel as a Service</p>
+    <div className="flex min-h-screen">
+      {/* Left — branding panel */}
+      <div className="hidden lg:flex lg:w-1/2 flex-col justify-between bg-foreground p-12 relative overflow-hidden">
+        {/* Subtle red accent line */}
+        <div className="absolute top-0 left-0 w-1 h-full bg-accent" />
+        
+        <div>
+          <img src={logoWhite} alt="Marcel" className="h-14 w-auto" />
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-foreground">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="h-11 w-full rounded-xl border border-border bg-surface px-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all"
-              placeholder="agency@maas.fr"
-              required
-            />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-foreground">Mot de passe</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="h-11 w-full rounded-xl border border-border bg-surface px-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all"
-              placeholder="••••••"
-              required
-            />
-          </div>
-
-          {error && (
-            <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-sm text-destructive">
-              {error}
-            </motion.p>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="flex h-11 w-full items-center justify-center rounded-xl bg-primary text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/25 transition-all hover:shadow-xl hover:shadow-primary/35 hover:brightness-110 disabled:opacity-50"
-          >
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Se connecter"}
-          </button>
-        </form>
-
-        {/* Rotating taglines */}
-        <div className="mt-8 h-5 text-center">
+        <div className="space-y-6">
           <AnimatePresence mode="wait">
-            <motion.p
+            <motion.h2
               key={taglineIdx}
-              initial={{ opacity: 0, y: 8 }}
+              initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.3 }}
-              className="text-xs text-muted-foreground/60"
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.4 }}
+              className="text-4xl xl:text-5xl font-bold tracking-tight text-primary-foreground leading-[1.1] max-w-lg"
             >
               {taglines[taglineIdx]}
-            </motion.p>
+            </motion.h2>
           </AnimatePresence>
+          <div className="h-1 w-16 bg-accent" />
         </div>
-      </motion.div>
+
+        <p className="text-sm text-primary-foreground/40 font-medium tracking-widest uppercase">
+          Marcel as a Service
+        </p>
+      </div>
+
+      {/* Right — login form */}
+      <div className="flex flex-1 items-center justify-center bg-background px-6">
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="w-full max-w-sm"
+        >
+          {/* Mobile logo */}
+          <div className="mb-10 lg:hidden">
+            <img src={logoWhite} alt="Marcel" className="h-12 w-auto invert dark:invert-0" />
+          </div>
+
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold tracking-tight text-foreground">Connexion</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Accédez à votre espace créatif
+            </p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Email
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="h-12 w-full border-b-2 border-border bg-transparent px-0 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground transition-colors"
+                placeholder="votre@email.com"
+                required
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Mot de passe
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="h-12 w-full border-b-2 border-border bg-transparent px-0 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground transition-colors"
+                placeholder="••••••••"
+                required
+              />
+            </div>
+
+            {error && (
+              <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-sm text-destructive font-medium">
+                {error}
+              </motion.p>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex h-12 w-full items-center justify-center bg-foreground text-sm font-bold uppercase tracking-wider text-background transition-all hover:bg-foreground/90 disabled:opacity-50"
+            >
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Se connecter"}
+            </button>
+          </form>
+
+          <div className="mt-8 flex items-center gap-2">
+            <div className="h-px flex-1 bg-border" />
+            <span className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">MaaS</span>
+            <div className="h-px flex-1 bg-border" />
+          </div>
+        </motion.div>
+      </div>
     </div>
   );
 };
