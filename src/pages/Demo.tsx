@@ -10,7 +10,6 @@ import { ArrowLeft, Eye } from "lucide-react";
    MOCK DATA — Full conversation simulation
    ═══════════════════════════════════════════════ */
 
-// Which workflow step each message belongs to (for filtering)
 interface DemoMessage extends ChatMessage {
   phase: WorkflowStep;
 }
@@ -79,7 +78,7 @@ Audacieux, contemporain, premium
 Lancement campagne : 15 avril 2026`;
 
 const DEMO_MESSAGES: DemoMessage[] = [
-  // ─── BRIEF (commercial) ───
+  // ─── BRIEF CLIENT ───
   {
     phase: "commercial",
     role: "agent",
@@ -113,7 +112,7 @@ const DEMO_MESSAGES: DemoMessage[] = [
   {
     phase: "commercial",
     role: "agent",
-    content: "Parfait, j'ai tout ce qu'il me faut. Voici le récapitulatif du brief que j'ai constitué :\n\n✅ **Marque** : Maison Lumière\n✅ **Produit** : Éclat Urbain — EDP 75ml\n✅ **Budget** : 150 000 €\n✅ **Canaux** : Instagram, YouTube, Display, OOH\n✅ **Cible** : Urbains 25-40, CSP+\n✅ **Objectif** : 50K ventes en 3 mois\n\nLe brief complet apparaît dans le panneau de droite. Souhaitez-vous le valider pour passer à la phase stratégique ?",
+    content: "Parfait, j'ai tout ce qu'il me faut. Voici le récapitulatif du brief que j'ai constitué :\n\n✅ **Marque** : Maison Lumière\n✅ **Produit** : Éclat Urbain — EDP 75ml\n✅ **Budget** : 150 000 €\n✅ **Canaux** : Instagram, YouTube, Display, OOH\n✅ **Cible** : Urbains 25-40, CSP+\n✅ **Objectif** : 50K ventes en 3 mois\n\nLe brief complet apparaît dans le panneau de droite. Vous pouvez le modifier directement si besoin. Souhaitez-vous le valider pour passer aux pistes créatives ?",
     quickReplies: [
       { id: "qr-validate-brief", label: "✅ Valider le brief" },
       { id: "qr-modify-brief", label: "Modifier quelque chose" },
@@ -126,18 +125,11 @@ const DEMO_MESSAGES: DemoMessage[] = [
     content: "✅ Valider le brief",
   },
 
-  // ─── STRATÉGIE (planner) ───
-  {
-    phase: "planner",
-    role: "agent",
-    content: "Brief validé ! 🎯 Je passe maintenant à l'analyse stratégique.\n\nAprès analyse du marché de la parfumerie premium et de votre cible, voici mes recommandations :\n\n**Insight consommateur** : Les urbains CSP+ cherchent des produits qui reflètent leur identité — pas juste un parfum, mais un statement personnel.\n\n**Territoire de marque** : Éclat Urbain se positionne à l'intersection du luxe accessible et de l'énergie urbaine.\n\n**Recommandation média** :\n- 40% Instagram (awareness + engagement)\n- 25% YouTube (considération)\n- 20% Display (retargeting)\n- 15% OOH (notoriété locale)\n\nJe lance maintenant la direction créative avec 3 pistes distinctes.",
-  },
-
-  // ─── DIRECTION CRÉATIVE (dc_visual) ───
+  // ─── DIRECTION CRÉATIVE ───
   {
     phase: "dc_visual",
     role: "agent",
-    content: "Voici **3 pistes créatives** pour « Éclat Urbain » ! 🎨\n\nChaque piste propose un univers visuel distinct avec sa propre direction artistique. Explorez-les dans le panneau de droite et choisissez celle qui vous parle le plus.",
+    content: "Brief validé ! 🎯 Après analyse stratégique du marché de la parfumerie premium, voici **3 pistes créatives** pour « Éclat Urbain » ! 🎨\n\nChaque piste propose un univers visuel distinct avec sa propre direction artistique. Explorez-les dans le panneau de droite et choisissez celle qui vous parle le plus.",
     metadata: {
       type: "dc_presentation",
       pistes: mockPistes,
@@ -154,46 +146,14 @@ const DEMO_MESSAGES: DemoMessage[] = [
   {
     phase: "dc_visual",
     role: "agent",
-    content: "Excellent choix ! 🔥 « L'Éclat Urbain » est la piste la plus audacieuse — elle va vraiment marquer les esprits.\n\nJe lance la rédaction du copy sur cette direction. Les textes seront déclinés pour chaque format média.",
+    content: "Excellent choix ! 🔥 « L'Éclat Urbain » est la piste la plus audacieuse — elle va vraiment marquer les esprits.\n\nJe lance la déclinaison des textes et la pré-production sur cette direction.",
   },
 
-  // ─── COPYWRITING (dc_copy) ───
-  {
-    phase: "dc_copy",
-    role: "agent",
-    content: "Voici les **déclinaisons copy** pour la piste « L'Éclat Urbain » ! ✍️\n\nJ'ai rédigé les headlines, body copy, et scripts vidéo/audio adaptés à chaque canal. Tout est consultable dans le panneau de droite.",
-    metadata: {
-      type: "dc_copy_result",
-      headlines: [
-        { format: "Instagram Story", text: "L'élégance ne connaît pas de trottoir.", variant: "A" },
-        { format: "YouTube Pre-roll", text: "Quand la ville devient votre signature.", variant: "A" },
-        { format: "Display Banner", text: "Éclat Urbain. Votre ville. Votre parfum.", variant: "A" },
-        { format: "OOH Abribus", text: "Le béton a trouvé son élégance.", variant: "A" },
-      ],
-      body_copy: [
-        { format: "Instagram Caption", text: "Entre les murs de la ville, une nouvelle définition de l'élégance s'écrit. Éclat Urbain capture cette énergie brute et la transforme en raffinement. Un parfum pour ceux qui font de chaque rue un podium.", word_count: 38 },
-        { format: "YouTube Description", text: "Maison Lumière présente Éclat Urbain, un Eau de Parfum qui fusionne l'énergie de la ville avec l'élégance intemporelle. Notes de tête : bergamote, poivre noir. Cœur : iris, béton mouillé. Fond : musc blanc, bois de cèdre.", word_count: 42 },
-      ],
-      video_scripts: [
-        { duration: "30s", script: "OUVERTURE : Toits de Paris, aube. Une silhouette sur un balcon. VOIX OFF : « La ville ne dort jamais. Elle pulse, elle vibre, elle inspire. » La protagoniste marche dans le Marais, entre lumière et ombre. VOIX OFF : « Éclat Urbain. Le parfum de ceux qui font de chaque instant un moment. » PACKSHOT sur fond noir." },
-        { duration: "15s", script: "MONTAGE RAPIDE : textures urbaines, flacon en gros plan, silhouette en mouvement. VOIX OFF : « Éclat Urbain. Votre ville. Votre signature. » LOGO Maison Lumière." },
-      ],
-      audio_scripts: [
-        { duration: "30s", script: "MUSIQUE : Beat électronique minimaliste, nappes de synthé warm. VOIX OFF (femme, 30 ans, ton confiant) : « Il y a dans cette ville une énergie qu'on ne trouve nulle part ailleurs. Une vibration qui transforme le quotidien en extraordinaire. Éclat Urbain, par Maison Lumière. Le parfum de votre énergie. »" },
-      ],
-    },
-  },
-  {
-    phase: "dc_copy",
-    role: "user",
-    content: "Super ! Les headlines sont percutantes. J'aime beaucoup « L'élégance ne connaît pas de trottoir ». On valide le copy.",
-  },
-
-  // ─── PRÉ-PRODUCTION (ppm) ───
+  // ─── PRÉ-PRODUCTION ───
   {
     phase: "ppm",
     role: "agent",
-    content: "Copy validé ! 🎬 Passons à la pré-production.\n\nJ'ai préparé le dossier PPM complet : storyboard, casting, décors et mockups pour chaque format. Tout est dans le panneau de droite.",
+    content: "Piste validée ! 🎬 Passons à la pré-production.\n\nJ'ai préparé le dossier PPM complet : storyboard, casting, décors et mockups pour chaque format. Tout est dans le panneau de droite.",
     metadata: {
       type: "ppm_presentation",
       summary: "Campagne « Éclat Urbain » — Production multi-canal. Tournage Paris, 3 jours. Post-production 2 semaines.",
@@ -239,33 +199,12 @@ const DEMO_MESSAGES: DemoMessage[] = [
     content: "Le storyboard est top. On valide la pré-prod, on peut lancer la production !",
   },
 
-  // ─── PRODUCTION (prod_image) ───
+  // ─── LIVRAISON ───
   {
-    phase: "prod_image",
+    phase: "delivered",
     role: "agent",
-    content: "PPM validé ! 🚀 La production est lancée.\n\nLes assets sont en cours de création. Je vous tiendrai informé de l'avancement.",
+    content: "PPM validé ! 🚀 La production est lancée. Les visuels, vidéos et audio sont en cours de création...",
   },
-  {
-    phase: "prod_image",
-    role: "agent",
-    content: "Les premiers visuels sont prêts ! Les images hero et packshot ont été finalisées. La production vidéo est en cours.",
-  },
-
-  // ─── VIDÉO (prod_video) ───
-  {
-    phase: "prod_video",
-    role: "agent",
-    content: "Le spot 30s et le pre-roll 15s sont finalisés ! 🎬 Le montage respecte parfaitement le storyboard validé. Les rushes slow-motion sont magnifiques.",
-  },
-
-  // ─── AUDIO (prod_audio) ───
-  {
-    phase: "prod_audio",
-    role: "agent",
-    content: "La voix off et la musique sont prêtes ! 🎵 L'ambiance sonore capture parfaitement l'énergie urbaine qu'on recherchait.",
-  },
-
-  // ─── LIVRAISON (delivered) ───
   {
     phase: "delivered",
     role: "agent",
@@ -293,20 +232,21 @@ const DEMO_MESSAGES: DemoMessage[] = [
   },
 ];
 
-/* Pipeline state per step */
+/* Only 4 client-visible steps */
 const STEP_ORDER: WorkflowStep[] = [
-  "commercial", "planner", "dc_visual", "dc_copy", "ppm",
-  "prod_image", "prod_video", "prod_audio", "delivered",
+  "commercial", "dc_visual", "ppm", "delivered",
 ];
 
 function buildPipeline(upToStep: WorkflowStep): PipelineStep[] {
-  const idx = STEP_ORDER.indexOf(upToStep);
-  return STEP_ORDER.map((step, i) => ({
-    step,
-    status: i === idx ? "in_progress" : "completed",
-    started_at: new Date().toISOString(),
-    completed_at: i !== idx ? new Date().toISOString() : null,
-  }));
+  return STEP_ORDER.map((step, i) => {
+    const idx = STEP_ORDER.indexOf(upToStep);
+    return {
+      step,
+      status: i === idx ? "in_progress" : "completed",
+      started_at: new Date().toISOString(),
+      completed_at: i !== idx ? new Date().toISOString() : null,
+    };
+  });
 }
 
 /* Brief data for OutputPanel */
@@ -328,7 +268,7 @@ const demoBriefData = {
 
 const DemoPage = () => {
   const navigate = useNavigate();
-  const [activeStep, setActiveStep] = useState<WorkflowStep>("delivered");
+  const [activeStep, setActiveStep] = useState<WorkflowStep>("commercial");
 
   const pipeline = useMemo(() => buildPipeline(activeStep), [activeStep]);
 

@@ -100,7 +100,10 @@ const OutputPanel = ({ artifacts, briefData, onSelectPiste, onApprove, onReject 
       <div className="flex-1 overflow-hidden">
         <AnimatePresence mode="wait">
           {active.type === "creative_brief" && active.content && (
-            <CreativeBrief key={`brief-${activeIndex}`} content={active.content} />
+            <CreativeBrief key={`brief-${activeIndex}`} content={active.content} onContentChange={(newContent) => {
+              // Update brief content in place
+              active.content = newContent;
+            }} />
           )}
           {active.type === "dc_presentation" && active.metadata && (
             <DCPresentation key={`dc-${activeIndex}`} metadata={active.metadata} onSelectPiste={onSelectPiste} />
