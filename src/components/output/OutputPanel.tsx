@@ -4,6 +4,7 @@ import CreativeBrief from "./CreativeBrief";
 import DCPresentation from "./DCPresentation";
 import DCCopyResult from "./DCCopyResult";
 import PPMPresentation from "./PPMPresentation";
+import CampaignGallery from "./CampaignGallery";
 import ValidationPanel from "./ValidationPanel";
 import type { ChatMessage } from "@/types";
 import { motion } from "framer-motion";
