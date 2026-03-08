@@ -8,9 +8,10 @@ import CampaignGallery from "./CampaignGallery";
 import CreativeCanvas from "./CreativeCanvas";
 import ValidationPanel from "./ValidationPanel";
 import BrandAssetsPanel from "./BrandAssetsPanel";
+import DeliveryPanel from "./DeliveryPanel";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import type { ChatMessage, BrandAsset, BrandAssetCategory, ProductionAsset, BriefData } from "@/types";
-import { Sparkles, FolderOpen, PenTool, FileText, Palette, Film, Rocket } from "lucide-react";
+import { Sparkles, FolderOpen, PenTool, FileText, Palette, Film, Rocket, Package } from "lucide-react";
 
 interface Props {
   artifacts: ChatMessage[];
