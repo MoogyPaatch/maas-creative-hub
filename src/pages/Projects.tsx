@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { getProjects, createConversation } from "@/lib/api";
+import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { Plus, Clock, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import type { Project } from "@/types";
@@ -22,7 +23,7 @@ const Projects = () => {
   useEffect(() => {
     getProjects()
       .then((data) => setProjects(data))
-      .catch(() => {})
+      .catch(() => toast.error("Impossible de charger les projets"))
       .finally(() => setLoading(false));
   }, []);
 
@@ -33,21 +34,24 @@ const Projects = () => {
       const conv = await createConversation(null, isAgency, isAgency ? "commercial" : null);
       navigate(`/project/${conv.project_id}`);
     } catch {
+      toast.error("Impossible de créer le projet");
       setCreating(false);
     }
   };
 
   const getPhaseLabel = (phase: string | null) => {
     const map: Record<string, string> = {
-      commercial: "Brief",
-      planner: "Stratégie",
-      dc_visual: "Direction Créative",
-      dc_copy: "Copywriting",
+      commercial: "Brief Client",
+      planner: "Stratégie Créative",
+      dc_visual: "Direction Visuelle",
+      dc_copy: "Direction Copy",
       ppm: "Pré-Production",
       prod_image: "Production Image",
       prod_video: "Production Vidéo",
       prod_audio: "Production Audio",
+      prod_router: "Production",
       delivered: "Livré",
+      finished: "Terminé",
     };
     return phase ? map[phase] || phase : "Nouveau";
   };

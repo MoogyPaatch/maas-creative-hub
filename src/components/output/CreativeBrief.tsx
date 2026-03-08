@@ -1,17 +1,20 @@
 import { useState, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import { motion } from "framer-motion";
-import { FileText, Pencil, Check, X } from "lucide-react";
+import { FileText, Pencil, Check, X, Lock } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 
 interface Props {
   content: string;
   onContentChange?: (newContent: string) => void;
+  readOnly?: boolean;
 }
 
-const CreativeBrief = ({ content, onContentChange }: Props) => {
+const CreativeBrief = ({ content, onContentChange, readOnly = false }: Props) => {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(content);
+
+  const canEdit = !!onContentChange && !readOnly;
 
   const startEdit = useCallback(() => {
     setDraft(content);
@@ -42,11 +45,13 @@ const CreativeBrief = ({ content, onContentChange }: Props) => {
             </div>
             <div>
               <h2 className="text-lg font-bold text-foreground">Brief Client</h2>
-              <p className="text-xs text-muted-foreground">Modifiable par le client</p>
+              <p className="text-xs text-muted-foreground">
+                {canEdit ? "Modifiable par le client" : "Lecture seule"}
+              </p>
             </div>
           </div>
 
-          {!editing && onContentChange && (
+          {!editing && canEdit && (
             <button
               onClick={startEdit}
               className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
@@ -54,6 +59,13 @@ const CreativeBrief = ({ content, onContentChange }: Props) => {
               <Pencil className="h-3.5 w-3.5" />
               Modifier
             </button>
+          )}
+
+          {!editing && !canEdit && (
+            <span className="flex items-center gap-1.5 rounded-lg bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground">
+              <Lock className="h-3 w-3" />
+              Lecture seule
+            </span>
           )}
 
           {editing && (

@@ -22,6 +22,7 @@ interface Props {
   onBrandAssetsChange?: (assets: BrandAsset[]) => void;
   highlightAssetCategories?: BrandAssetCategory[];
   showAssetsTab?: boolean;
+  onBriefChange?: (content: string) => void;
 }
 
 function briefToMarkdown(brief: BriefData): string {
@@ -45,7 +46,7 @@ function briefToMarkdown(brief: BriefData): string {
   return lines.join("\n\n");
 }
 
-const OutputPanel = ({ artifacts, briefData, onSelectPiste, onApprove, onReject, brandAssets = [], onBrandAssetsChange, highlightAssetCategories, showAssetsTab = true }: Props) => {
+const OutputPanel = ({ artifacts, briefData, onSelectPiste, onApprove, onReject, brandAssets = [], onBrandAssetsChange, highlightAssetCategories, showAssetsTab = true, onBriefChange }: Props) => {
   const typedArtifacts = artifacts.filter((a) => a.metadata?.type);
   
   const displayItems: { type: string; content?: string; metadata?: any }[] = [];
@@ -147,7 +148,11 @@ const OutputPanel = ({ artifacts, briefData, onSelectPiste, onApprove, onReject,
             )}
             {active?.type === "creative_brief" && active.content && (
               <motion.div key={`brief-${activeIndex}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="h-full">
-                <CreativeBrief content={active.content} onContentChange={(newContent) => { active.content = newContent; }} />
+                <CreativeBrief
+                  content={active.content}
+                  onContentChange={onBriefChange}
+                  readOnly={!onBriefChange}
+                />
               </motion.div>
             )}
             {active?.type === "dc_presentation" && active.metadata && (

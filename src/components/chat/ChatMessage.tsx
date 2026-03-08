@@ -4,11 +4,11 @@ import ReactMarkdown from "react-markdown";
 
 interface Props {
   message: ChatMessageType;
-  isLast: boolean;
+  showQuickReplies: boolean;
   onQuickReply?: (id: string) => void;
 }
 
-const ChatMessageBubble = ({ message, isLast, onQuickReply }: Props) => {
+const ChatMessageBubble = ({ message, showQuickReplies, onQuickReply }: Props) => {
   const isUser = message.role === "user";
 
   return (
@@ -37,8 +37,7 @@ const ChatMessageBubble = ({ message, isLast, onQuickReply }: Props) => {
           </div>
         </div>
 
-        {/* Only show quick replies on the last agent message */}
-        {isLast && !isUser && message.quickReplies && message.quickReplies.length > 0 && (
+        {showQuickReplies && !isUser && message.quickReplies && message.quickReplies.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 5 }}
             animate={{ opacity: 1, y: 0 }}

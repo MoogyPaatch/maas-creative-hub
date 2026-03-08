@@ -60,18 +60,15 @@ export interface BriefData {
 export interface MessageMetadata {
   type: string;
   content?: string;
-  // DC Presentation
   slides_url?: string;
   pptx_url?: string;
   piste_thumbnail_urls?: string[];
   piste_titles?: string[];
   pistes?: DCPiste[];
-  // DC Copy
   headlines?: Array<{ format: string; text: string; variant: string }>;
   body_copy?: Array<{ format: string; text: string; word_count: number }>;
   video_scripts?: Array<{ duration: string; script: string }>;
   audio_scripts?: Array<{ duration: string; script: string }>;
-  // PPM
   storyboard_count?: number;
   casting_count?: number;
   settings_count?: number;
@@ -82,14 +79,11 @@ export interface MessageMetadata {
   settings?: Array<{ name: string; description: string }>;
   production_notes?: { budget_range: string; timeline: string };
   mockups?: Array<{ format: string; description: string }>;
-  // Validation
   gate?: string;
   validation_id?: string;
-  // Campaign Gallery
   production_assets?: ProductionAsset[];
   campaign_title?: string;
   zip_url?: string;
-  // Asset Request
   requested_asset_categories?: BrandAssetCategory[];
 }
 
@@ -169,9 +163,14 @@ export type WorkflowStep =
   | "prod_audio"
   | "delivered";
 
-export const WORKFLOW_STEPS: { key: WorkflowStep; label: string; icon?: string }[] = [
-  { key: "commercial", label: "Brief Client", icon: "📋" },
-  { key: "dc_visual", label: "Direction Créative", icon: "🎨" },
-  { key: "ppm", label: "Pré-Production", icon: "🎬" },
-  { key: "delivered", label: "Livraison", icon: "🚀" },
+export const WORKFLOW_STEPS: { key: WorkflowStep; label: string; shortLabel: string }[] = [
+  { key: "commercial", label: "Brief Client", shortLabel: "Brief" },
+  { key: "planner", label: "Stratégie Créative", shortLabel: "Stratégie" },
+  { key: "dc_visual", label: "Direction Visuelle", shortLabel: "DC Visuel" },
+  { key: "dc_copy", label: "Direction Copy", shortLabel: "DC Copy" },
+  { key: "ppm", label: "Pré-Production", shortLabel: "PPM" },
+  { key: "prod_image", label: "Production Image", shortLabel: "Image" },
+  { key: "prod_video", label: "Production Vidéo", shortLabel: "Vidéo" },
+  { key: "prod_audio", label: "Production Audio", shortLabel: "Audio" },
+  { key: "delivered", label: "Livraison", shortLabel: "Livré" },
 ];

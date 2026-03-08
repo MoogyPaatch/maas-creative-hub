@@ -1,4 +1,6 @@
-const API_URL = "https://maas-backend-rmbomgmltq-ew.a.run.app/api";
+import { toast } from "sonner";
+
+const API_URL = import.meta.env.VITE_API_URL || "https://maas-backend-rmbomgmltq-ew.a.run.app/api";
 
 function getToken(): string | null {
   return localStorage.getItem("maas_token");
@@ -10,16 +12,30 @@ function authHeaders(): Record<string, string> {
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...authHeaders(),
-      ...options.headers,
-    },
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders(),
+        ...options.headers,
+      },
+    });
+  } catch (err) {
+    toast.error("Erreur réseau. Vérifiez votre connexion.");
+    throw err;
+  }
+
+  if (res.status === 401) {
+    localStorage.removeItem("maas_token");
+    window.location.href = "/login";
+    throw new Error("Session expirée");
+  }
+
   if (!res.ok) {
     const text = await res.text().catch(() => "");
+    toast.error(`Erreur API : ${res.status}`);
     throw new Error(`API Error ${res.status}: ${text}`);
   }
   return res.json();
@@ -98,7 +114,15 @@ export async function sendMessageSSE(
     },
     body: JSON.stringify({ type, value, has_file: hasFile }),
   });
-  if (!res.ok) throw new Error(`Message error ${res.status}`);
+  if (res.status === 401) {
+    localStorage.removeItem("maas_token");
+    window.location.href = "/login";
+    throw new Error("Session expirée");
+  }
+  if (!res.ok) {
+    toast.error(`Erreur d'envoi : ${res.status}`);
+    throw new Error(`Message error ${res.status}`);
+  }
   return res.body;
 }
 
@@ -113,7 +137,10 @@ export async function approveValidation(id: string, feedback: string | null = nu
     },
     body: JSON.stringify({ feedback }),
   });
-  if (!res.ok) throw new Error("Validation error");
+  if (!res.ok) {
+    toast.error("Erreur lors de la validation");
+    throw new Error("Validation error");
+  }
   return res.body;
 }
 
@@ -127,13 +154,23 @@ export async function rejectValidation(id: string, feedback: string) {
     },
     body: JSON.stringify({ feedback }),
   });
-  if (!res.ok) throw new Error("Validation error");
+  if (!res.ok) {
+    toast.error("Erreur lors du rejet");
+    throw new Error("Validation error");
+  }
   return res.body;
 }
 
 // Brief
 export async function getBrief(projectId: string) {
   return request<any>(`/projects/${projectId}/brief`);
+}
+
+export async function updateBrief(projectId: string, briefData: Record<string, unknown>) {
+  return request<any>(`/projects/${projectId}/brief`, {
+    method: "PATCH",
+    body: JSON.stringify(briefData),
+  });
 }
 
 // PPM

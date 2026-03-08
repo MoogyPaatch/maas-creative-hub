@@ -9,7 +9,7 @@ const ThinkingIndicator = ({ label }: Props) => (
     initial={{ opacity: 0, y: 5 }}
     animate={{ opacity: 1, y: 0 }}
     exit={{ opacity: 0, y: -5 }}
-    className="flex items-center gap-3 px-4 py-3"
+    className="flex items-center gap-3 rounded-xl bg-muted/50 px-4 py-3 mx-4 mb-2"
   >
     <div className="flex gap-1">
       {[0, 1, 2].map((i) => (

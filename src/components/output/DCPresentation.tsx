@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Sparkles } from "lucide-react";
 import SlideShell, { type SlideItem } from "./SlideShell";
+import ImageWithFallback from "@/components/ui/ImageWithFallback";
 import type { MessageMetadata, DCPiste } from "@/types";
 
 interface Props {
@@ -8,14 +9,12 @@ interface Props {
   onSelectPiste?: (pisteId: string) => void;
 }
 
-/* ─── Deterministic color from string ─── */
 function pisteColor(title: string, index: number): string {
   const hues = [250, 340, 160, 30, 200];
   const h = hues[index % hues.length];
   return `hsl(${h}, 60%, 55%)`;
 }
 
-/* ─── Section Block ─── */
 function Section({ label, text }: { label: string; text: string }) {
   return (
     <div className="rounded-xl border border-border bg-muted/30 p-5">
@@ -27,7 +26,6 @@ function Section({ label, text }: { label: string; text: string }) {
   );
 }
 
-/* ─── Statement Layout (no image) ─── */
 function StatementSlide({
   piste,
   index,
@@ -41,7 +39,6 @@ function StatementSlide({
 }) {
   return (
     <div className="relative flex h-full w-full flex-col items-center justify-center overflow-hidden bg-card p-6 lg:p-12">
-      {/* Giant number watermark */}
       <span
         className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 select-none text-[18rem] font-black leading-none lg:text-[24rem]"
         style={{ color: accentColor, opacity: 0.06 }}
@@ -85,7 +82,6 @@ function StatementSlide({
   );
 }
 
-/* ─── Image Layout ─── */
 function ImageSlide({
   piste,
   index,
@@ -99,15 +95,11 @@ function ImageSlide({
 }) {
   return (
     <div className="flex h-full w-full flex-col lg:flex-row overflow-hidden bg-card">
-      {/* Visual half */}
       <div className="relative h-2/5 w-full lg:h-full lg:w-1/2 overflow-hidden">
-        <img
+        <ImageWithFallback
           src={piste.thumbnail_url}
           alt={piste.title}
           className="h-full w-full object-cover"
-          onError={(e) => {
-            (e.target as HTMLImageElement).style.display = "none";
-          }}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-card/80 via-transparent to-transparent lg:bg-gradient-to-r lg:from-transparent lg:via-transparent lg:to-card/60" />
         <div className="absolute bottom-4 left-4">
@@ -120,7 +112,6 @@ function ImageSlide({
         </div>
       </div>
 
-      {/* Content half */}
       <div className="flex h-3/5 w-full lg:h-full lg:w-1/2 flex-col justify-center p-6 lg:p-10 overflow-y-auto scrollbar-thin">
         <h3 className="mb-2 text-2xl font-extrabold tracking-tight text-foreground lg:text-3xl">
           {piste.title}
@@ -149,7 +140,6 @@ function ImageSlide({
   );
 }
 
-/* ─── Main Component ─── */
 const DCPresentation = ({ metadata, onSelectPiste }: Props) => {
   const pistes = metadata.pistes || [];
 
