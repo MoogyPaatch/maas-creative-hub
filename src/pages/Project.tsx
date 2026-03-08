@@ -362,6 +362,7 @@ const ProjectPage = () => {
           <OutputPanel
             artifacts={artifacts}
             briefData={briefData}
+            messages={messages}
             onSelectPiste={handleSelectPiste}
             onApprove={handleApprove}
             onReject={handleReject}
