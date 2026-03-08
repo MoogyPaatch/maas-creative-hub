@@ -10,7 +10,7 @@ import ValidationPanel from "./ValidationPanel";
 import BrandAssetsPanel from "./BrandAssetsPanel";
 import type { ChatMessage, BrandAsset, BrandAssetCategory, ProductionAsset } from "@/types";
 import { motion } from "framer-motion";
-import { Sparkles, FolderOpen } from "lucide-react";
+import { Sparkles, FolderOpen, PenTool } from "lucide-react";
 
 interface Props {
   artifacts: ChatMessage[];
