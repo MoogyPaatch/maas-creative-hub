@@ -5,6 +5,8 @@ import ChatInput from "./ChatInput";
 import ThinkingIndicator from "./ThinkingIndicator";
 import { ArrowDown } from "lucide-react";
 import type { ChatMessage } from "@/types";
+import logoBlack from "@/assets/logo-marcel-black.png";
+import logoWhite from "@/assets/logo-marcel-white.png";
 
 interface Props {
   messages: ChatMessage[];
@@ -43,22 +45,22 @@ const ChatPanel = ({ messages, thinking, onSendMessage, onQuickReply, onAttach, 
   );
 
   return (
-    <div className="flex h-full flex-col bg-card">
+    <div className="flex h-full flex-col bg-background">
       {/* Header */}
       <div className="border-b border-border px-5 py-3">
         <div className="flex items-center gap-3">
-          <div className="relative flex h-8 w-8 items-center justify-center rounded-xl bg-primary shadow-lg shadow-primary/20" aria-hidden>
-            <span className="text-xs font-bold text-primary-foreground">M</span>
-          </div>
+          <img src={logoBlack} alt="Marcel" className="h-7 w-auto dark:hidden" />
+          <img src={logoWhite} alt="Marcel" className="h-7 w-auto hidden dark:block" />
+          <div className="h-4 w-px bg-border" />
           <div>
             <div className="flex items-center gap-2">
-              <p className="text-sm font-semibold text-foreground">Marcel AI</p>
-              <span className="relative flex h-2 w-2">
+              <p className="text-sm font-bold text-foreground">Marcel AI</p>
+              <span className="relative flex h-1.5 w-1.5">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" style={{ animationDuration: "2s" }} />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
+                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-success" />
               </span>
             </div>
-            <p className="text-[10px] text-muted-foreground">Agence créative IA</p>
+            <p className="text-[10px] text-muted-foreground font-medium">Agence créative IA</p>
           </div>
         </div>
       </div>
@@ -71,10 +73,6 @@ const ChatPanel = ({ messages, thinking, onSendMessage, onQuickReply, onAttach, 
           className="absolute inset-0 space-y-4 overflow-y-auto p-5 scrollbar-thin"
           role="log"
           aria-label="Conversation"
-          style={{
-            backgroundImage: "radial-gradient(circle, hsl(var(--border)) 0.5px, transparent 0.5px)",
-            backgroundSize: "24px 24px",
-          }}
         >
           {messages.map((msg, i) => (
             <ChatMessageBubble
@@ -89,7 +87,6 @@ const ChatPanel = ({ messages, thinking, onSendMessage, onQuickReply, onAttach, 
           </AnimatePresence>
         </div>
 
-        {/* Scroll to bottom */}
         <AnimatePresence>
           {showScrollBtn && (
             <motion.button
@@ -97,10 +94,10 @@ const ChatPanel = ({ messages, thinking, onSendMessage, onQuickReply, onAttach, 
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.8 }}
               onClick={scrollToBottom}
-              className="absolute bottom-4 right-4 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card shadow-lg transition-colors hover:bg-muted"
+              className="absolute bottom-4 right-4 z-10 flex h-8 w-8 items-center justify-center border border-border bg-background transition-colors hover:bg-secondary"
               aria-label="Aller en bas"
             >
-              <ArrowDown className="h-4 w-4 text-muted-foreground" />
+              <ArrowDown className="h-3.5 w-3.5 text-muted-foreground" />
             </motion.button>
           )}
         </AnimatePresence>
