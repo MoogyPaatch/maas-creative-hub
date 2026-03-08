@@ -132,6 +132,23 @@ const OutputPanel = ({ artifacts, briefData, onSelectPiste, onApprove, onReject,
               />
             </motion.div>
           )}
+          {activeTab === "canvas" && hasCanvasTab && (
+            <motion.div
+              key="canvas"
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98 }}
+              className="h-full"
+            >
+              <CreativeCanvas
+                assets={galleryAssets}
+                onBack={() => {
+                  const idx = displayItems.findIndex(d => d.type === "campaign_gallery");
+                  setActiveTab(idx >= 0 ? idx : 0);
+                }}
+              />
+            </motion.div>
+          )}
           {active?.type === "creative_brief" && active.content && (
             <CreativeBrief key={`brief-${activeIndex}`} content={active.content} onContentChange={(newContent) => {
               active.content = newContent;
@@ -147,7 +164,7 @@ const OutputPanel = ({ artifacts, briefData, onSelectPiste, onApprove, onReject,
             <PPMPresentation key={`ppm-${activeIndex}`} metadata={active.metadata} />
           )}
           {active?.type === "campaign_gallery" && active.metadata && (
-            <CampaignGallery key={`gallery-${activeIndex}`} metadata={active.metadata} />
+            <CampaignGallery key={`gallery-${activeIndex}`} metadata={active.metadata} onOpenCanvas={() => setActiveTab("canvas")} />
           )}
           {active?.type === "validation_required" && active.metadata && onApprove && onReject && (
             <div key={`validation-${activeIndex}`} className="flex h-full items-center justify-center p-8">
