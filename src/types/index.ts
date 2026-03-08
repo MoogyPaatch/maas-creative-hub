@@ -44,6 +44,19 @@ export interface QuickReply {
   label: string;
 }
 
+export interface BriefData {
+  brand: string;
+  product: string;
+  objective: string;
+  budget: string;
+  channels: string[];
+  tone: string[];
+  key_message: string;
+  kpis: string[];
+  timing: string;
+  [key: string]: unknown;
+}
+
 export interface MessageMetadata {
   type: string;
   content?: string;
@@ -156,9 +169,9 @@ export type WorkflowStep =
   | "prod_audio"
   | "delivered";
 
-export const WORKFLOW_STEPS: { key: WorkflowStep; label: string }[] = [
-  { key: "commercial", label: "Brief Client" },
-  { key: "dc_visual", label: "Direction Créative" },
-  { key: "ppm", label: "Pré-Production" },
-  { key: "delivered", label: "Livraison" },
+export const WORKFLOW_STEPS: { key: WorkflowStep; label: string; icon?: string }[] = [
+  { key: "commercial", label: "Brief Client", icon: "📋" },
+  { key: "dc_visual", label: "Direction Créative", icon: "🎨" },
+  { key: "ppm", label: "Pré-Production", icon: "🎬" },
+  { key: "delivered", label: "Livraison", icon: "🚀" },
 ];

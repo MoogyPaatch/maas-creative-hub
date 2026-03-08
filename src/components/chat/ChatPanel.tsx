@@ -10,10 +10,11 @@ interface Props {
   thinking: string | null;
   onSendMessage: (text: string) => void;
   onQuickReply: (id: string) => void;
+  onAttach?: (files: FileList) => void;
   isStreaming: boolean;
 }
 
-const ChatPanel = ({ messages, thinking, onSendMessage, onQuickReply, isStreaming }: Props) => {
+const ChatPanel = ({ messages, thinking, onSendMessage, onQuickReply, onAttach, isStreaming }: Props) => {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -26,7 +27,7 @@ const ChatPanel = ({ messages, thinking, onSendMessage, onQuickReply, isStreamin
     <div className="flex h-full flex-col bg-card">
       <div className="border-b border-border px-5 py-3">
         <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary" aria-hidden>
             <span className="text-xs font-bold text-primary-foreground">M</span>
           </div>
           <div>
@@ -36,7 +37,12 @@ const ChatPanel = ({ messages, thinking, onSendMessage, onQuickReply, isStreamin
         </div>
       </div>
 
-      <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto p-5 scrollbar-thin">
+      <div
+        ref={scrollRef}
+        className="flex-1 space-y-4 overflow-y-auto p-5 scrollbar-thin"
+        role="log"
+        aria-label="Conversation"
+      >
         {messages.map((msg, i) => (
           <ChatMessageBubble
             key={i}
@@ -50,7 +56,7 @@ const ChatPanel = ({ messages, thinking, onSendMessage, onQuickReply, isStreamin
         </AnimatePresence>
       </div>
 
-      <ChatInput onSend={onSendMessage} disabled={isStreaming} />
+      <ChatInput onSend={onSendMessage} onAttach={onAttach} disabled={isStreaming} />
     </div>
   );
 };

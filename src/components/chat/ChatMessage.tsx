@@ -19,7 +19,7 @@ const ChatMessageBubble = ({ message, isLast, onQuickReply }: Props) => {
       className={`flex gap-3 ${isUser ? "flex-row-reverse" : "flex-row"}`}
     >
       {!isUser && (
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary" aria-hidden>
           <span className="text-xs font-bold text-primary-foreground">M</span>
         </div>
       )}
@@ -44,6 +44,8 @@ const ChatMessageBubble = ({ message, isLast, onQuickReply }: Props) => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
             className="flex flex-wrap gap-2"
+            role="group"
+            aria-label="Réponses rapides"
           >
             {message.quickReplies.map((qr) => (
               <button

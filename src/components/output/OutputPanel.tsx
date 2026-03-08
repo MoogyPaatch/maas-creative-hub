@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import CreativeBrief from "./CreativeBrief";
 import DCPresentation from "./DCPresentation";
 import DCCopyResult from "./DCCopyResult";
@@ -8,13 +8,13 @@ import CampaignGallery from "./CampaignGallery";
 import CreativeCanvas from "./CreativeCanvas";
 import ValidationPanel from "./ValidationPanel";
 import BrandAssetsPanel from "./BrandAssetsPanel";
-import type { ChatMessage, BrandAsset, BrandAssetCategory, ProductionAsset } from "@/types";
-import { motion } from "framer-motion";
+import ErrorBoundary from "@/components/ErrorBoundary";
+import type { ChatMessage, BrandAsset, BrandAssetCategory, ProductionAsset, BriefData } from "@/types";
 import { Sparkles, FolderOpen, PenTool } from "lucide-react";
 
 interface Props {
   artifacts: ChatMessage[];
-  briefData?: any;
+  briefData?: BriefData;
   onSelectPiste?: (pisteId: string) => void;
   onApprove?: (id: string, feedback: string | null) => void;
   onReject?: (id: string, feedback: string) => void;
@@ -24,7 +24,7 @@ interface Props {
   showAssetsTab?: boolean;
 }
 
-function briefToMarkdown(brief: any): string {
+function briefToMarkdown(brief: BriefData): string {
   if (!brief) return "";
   const lines: string[] = [];
   if (brief.brand) lines.push(`## Marque\n${brief.brand}`);
@@ -59,16 +59,12 @@ const OutputPanel = ({ artifacts, briefData, onSelectPiste, onApprove, onReject,
     displayItems.push({ type: a.metadata!.type, content: a.metadata?.content, metadata: a.metadata });
   });
 
-  // "brand_assets" is a permanent virtual tab, always first when enabled
   const hasAssetsTab = showAssetsTab && onBrandAssetsChange;
-  
-  // Check if campaign_gallery exists to show canvas tab
   const galleryArtifact = displayItems.find(d => d.type === "campaign_gallery");
   const galleryAssets: ProductionAsset[] = galleryArtifact?.metadata?.production_assets || [];
   const hasCanvasTab = galleryAssets.length > 0;
 
   const [activeTab, setActiveTab] = useState<"assets" | "canvas" | number>(hasAssetsTab ? "assets" : 0);
-  const [canvasActive, setCanvasActive] = useState(false);
 
   useEffect(() => {
     if (displayItems.length > 0 && activeTab !== "assets" && activeTab !== "canvas") {
@@ -76,7 +72,6 @@ const OutputPanel = ({ artifacts, briefData, onSelectPiste, onApprove, onReject,
     }
   }, [displayItems.length]);
 
-  // Auto-switch to latest artifact when new ones arrive, but keep assets/canvas if user chose it
   const activeIndex = activeTab === "assets" || activeTab === "canvas" ? -1 : (activeTab as number);
   const active = activeIndex >= 0 ? displayItems[activeIndex] || null : null;
 
@@ -116,83 +111,93 @@ const OutputPanel = ({ artifacts, briefData, onSelectPiste, onApprove, onReject,
   return (
     <div className="flex h-full flex-col bg-background">
       <div className="flex-1 overflow-hidden">
-        <AnimatePresence mode="wait">
-          {activeTab === "assets" && onBrandAssetsChange && (
-            <motion.div
-              key="brand-assets"
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 10 }}
-              className="h-full"
-            >
-              <BrandAssetsPanel
-                assets={brandAssets}
-                onAssetsChange={onBrandAssetsChange}
-                highlightCategories={highlightAssetCategories}
-              />
-            </motion.div>
-          )}
-          {activeTab === "canvas" && hasCanvasTab && (
-            <motion.div
-              key="canvas"
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.98 }}
-              className="h-full"
-            >
-              <CreativeCanvas
-                assets={galleryAssets}
-                onBack={() => {
-                  const idx = displayItems.findIndex(d => d.type === "campaign_gallery");
-                  setActiveTab(idx >= 0 ? idx : 0);
-                }}
-              />
-            </motion.div>
-          )}
-          {active?.type === "creative_brief" && active.content && (
-            <CreativeBrief key={`brief-${activeIndex}`} content={active.content} onContentChange={(newContent) => {
-              active.content = newContent;
-            }} />
-          )}
-          {active?.type === "dc_presentation" && active.metadata && (
-            <DCPresentation key={`dc-${activeIndex}`} metadata={active.metadata} onSelectPiste={onSelectPiste} />
-          )}
-          {active?.type === "dc_copy_result" && active.metadata && (
-            <DCCopyResult key={`copy-${activeIndex}`} metadata={active.metadata} />
-          )}
-          {active?.type === "ppm_presentation" && active.metadata && (
-            <PPMPresentation key={`ppm-${activeIndex}`} metadata={active.metadata} />
-          )}
-          {active?.type === "campaign_gallery" && active.metadata && (
-            <CampaignGallery key={`gallery-${activeIndex}`} metadata={active.metadata} onOpenCanvas={() => setActiveTab("canvas")} />
-          )}
-          {active?.type === "validation_required" && active.metadata && onApprove && onReject && (
-            <div key={`validation-${activeIndex}`} className="flex h-full items-center justify-center p-8">
-              <ValidationPanel
-                gate={active.metadata.gate || ""}
-                validationId={active.metadata.validation_id || ""}
-                content={active.metadata.content || ""}
-                onApprove={onApprove}
-                onReject={onReject}
-              />
-            </div>
-          )}
-        </AnimatePresence>
+        <ErrorBoundary>
+          <AnimatePresence mode="wait">
+            {activeTab === "assets" && onBrandAssetsChange && (
+              <motion.div
+                key="brand-assets"
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 10 }}
+                className="h-full"
+              >
+                <BrandAssetsPanel
+                  assets={brandAssets}
+                  onAssetsChange={onBrandAssetsChange}
+                  highlightCategories={highlightAssetCategories}
+                />
+              </motion.div>
+            )}
+            {activeTab === "canvas" && hasCanvasTab && (
+              <motion.div
+                key="canvas"
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.98 }}
+                className="h-full"
+              >
+                <CreativeCanvas
+                  assets={galleryAssets}
+                  onBack={() => {
+                    const idx = displayItems.findIndex(d => d.type === "campaign_gallery");
+                    setActiveTab(idx >= 0 ? idx : 0);
+                  }}
+                />
+              </motion.div>
+            )}
+            {active?.type === "creative_brief" && active.content && (
+              <motion.div key={`brief-${activeIndex}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="h-full">
+                <CreativeBrief content={active.content} onContentChange={(newContent) => { active.content = newContent; }} />
+              </motion.div>
+            )}
+            {active?.type === "dc_presentation" && active.metadata && (
+              <motion.div key={`dc-${activeIndex}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="h-full">
+                <DCPresentation metadata={active.metadata} onSelectPiste={onSelectPiste} />
+              </motion.div>
+            )}
+            {active?.type === "dc_copy_result" && active.metadata && (
+              <motion.div key={`copy-${activeIndex}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="h-full">
+                <DCCopyResult metadata={active.metadata} />
+              </motion.div>
+            )}
+            {active?.type === "ppm_presentation" && active.metadata && (
+              <motion.div key={`ppm-${activeIndex}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="h-full">
+                <PPMPresentation metadata={active.metadata} />
+              </motion.div>
+            )}
+            {active?.type === "campaign_gallery" && active.metadata && (
+              <motion.div key={`gallery-${activeIndex}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="h-full">
+                <CampaignGallery metadata={active.metadata} onOpenCanvas={() => setActiveTab("canvas")} />
+              </motion.div>
+            )}
+            {active?.type === "validation_required" && active.metadata && onApprove && onReject && (
+              <motion.div key={`validation-${activeIndex}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="flex h-full items-center justify-center p-8">
+                <ValidationPanel
+                  gate={active.metadata.gate || ""}
+                  validationId={active.metadata.validation_id || ""}
+                  content={active.metadata.content || ""}
+                  onApprove={onApprove}
+                  onReject={onReject}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </ErrorBoundary>
       </div>
 
-      {/* Bottom tab bar — always visible when there's content */}
+      {/* Bottom tab bar */}
       {(hasAssetsTab || displayItems.length > 1) && (
         <div className="flex justify-center border-t border-border bg-card/50 px-4 py-3 backdrop-blur-sm">
-          <div className="flex gap-1.5 rounded-full border border-border bg-card px-2 py-1">
-            {/* Permanent assets tab */}
+          <div className="flex gap-1.5 rounded-full border border-border bg-card px-2 py-1 overflow-x-auto scrollbar-thin max-w-full">
             {hasAssetsTab && (
               <button
                 onClick={() => setActiveTab("assets")}
-                className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition-all ${
+                className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition-all whitespace-nowrap ${
                   activeTab === "assets"
                     ? "bg-primary text-primary-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground hover:bg-muted"
                 }`}
+                aria-label="Onglet Assets de marque"
               >
                 <FolderOpen className="h-3 w-3" />
                 Assets
@@ -207,7 +212,7 @@ const OutputPanel = ({ artifacts, briefData, onSelectPiste, onApprove, onReject,
               <button
                 key={i}
                 onClick={() => setActiveTab(i)}
-                className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-all ${
+                className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-all whitespace-nowrap ${
                   activeTab === i
                     ? "bg-primary text-primary-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground hover:bg-muted"
@@ -216,15 +221,15 @@ const OutputPanel = ({ artifacts, briefData, onSelectPiste, onApprove, onReject,
                 {labels[item.type] || item.type}
               </button>
             ))}
-            {/* Canvas tab — visible when gallery exists */}
             {hasCanvasTab && (
               <button
                 onClick={() => setActiveTab("canvas")}
-                className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition-all ${
+                className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition-all whitespace-nowrap ${
                   activeTab === "canvas"
                     ? "bg-primary text-primary-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground hover:bg-muted"
                 }`}
+                aria-label="Onglet Canevas créatif"
               >
                 <PenTool className="h-3 w-3" />
                 Canevas
