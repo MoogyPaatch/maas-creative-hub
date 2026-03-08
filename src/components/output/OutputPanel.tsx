@@ -111,6 +111,9 @@ const OutputPanel = ({ artifacts, briefData, onSelectPiste, onApprove, onReject 
           {active.type === "ppm_presentation" && active.metadata && (
             <PPMPresentation key={`ppm-${activeIndex}`} metadata={active.metadata} />
           )}
+          {active.type === "campaign_gallery" && active.metadata && (
+            <CampaignGallery key={`gallery-${activeIndex}`} metadata={active.metadata} />
+          )}
           {active.type === "validation_required" && active.metadata && onApprove && onReject && (
             <div key={`validation-${activeIndex}`} className="flex h-full items-center justify-center p-8">
               <ValidationPanel

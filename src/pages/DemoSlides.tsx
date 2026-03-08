@@ -1,6 +1,7 @@
 import { useState } from "react";
 import DCPresentation from "@/components/output/DCPresentation";
 import PPMPresentation from "@/components/output/PPMPresentation";
+import CampaignGallery from "@/components/output/CampaignGallery";
 import type { MessageMetadata, DCPiste } from "@/types";
 
 const mockPistes: DCPiste[] = [
@@ -84,45 +85,58 @@ const mockPPMMetadata: MessageMetadata = {
   ],
 };
 
+const mockCampaignMetadata: MessageMetadata = {
+  type: "campaign_gallery",
+  campaign_title: "Éclat Urbain — Assets Finaux",
+  zip_url: "#",
+  production_assets: [
+    { id: "img-1", type: "image", title: "Hero — Balcon Paris", format: "1920×1080", url: "/placeholder.svg", thumbnail_url: "/placeholder.svg" },
+    { id: "img-2", type: "image", title: "Packshot Flacon — Fond Noir", format: "1080×1080", url: "/placeholder.svg", thumbnail_url: "/placeholder.svg" },
+    { id: "img-3", type: "image", title: "Street — Marais", format: "1080×1350", url: "/placeholder.svg", thumbnail_url: "/placeholder.svg" },
+    { id: "img-4", type: "image", title: "Galerie Art — Plan Large", format: "1920×1080", url: "/placeholder.svg", thumbnail_url: "/placeholder.svg" },
+    { id: "img-5", type: "image", title: "Story Instagram — Particules", format: "1080×1920", url: "/placeholder.svg", thumbnail_url: "/placeholder.svg" },
+    { id: "img-6", type: "image", title: "OOH Abribus — Dos Toits", format: "1200×1600", url: "/placeholder.svg", thumbnail_url: "/placeholder.svg" },
+    { id: "vid-1", type: "video", title: "Spot 30s — Version cinéma", format: "16:9 • 4K", url: "#", duration: "0:30" },
+    { id: "vid-2", type: "video", title: "Story 15s — Instagram", format: "9:16 • 1080p", url: "#", duration: "0:15" },
+    { id: "aud-1", type: "audio", title: "Voix off — FR", format: "WAV", url: "#", duration: "0:32", file_size: "12 Mo" },
+    { id: "aud-2", type: "audio", title: "Musique — Ambiance urbaine", format: "MP3", url: "#", duration: "1:05", file_size: "4.2 Mo" },
+    { id: "doc-1", type: "document", title: "Brief créatif final", format: "PDF", url: "#", file_size: "2.1 Mo" },
+    { id: "doc-2", type: "document", title: "Présentation client", format: "PPTX", url: "#", file_size: "18 Mo" },
+    { id: "doc-3", type: "document", title: "Charte graphique adaptée", format: "PDF", url: "#", file_size: "5.4 Mo" },
+  ],
+};
+
+const views = ["dc", "ppm", "campaign"] as const;
+type View = (typeof views)[number];
+const viewLabels: Record<View, string> = { dc: "Pistes DC", ppm: "PPM", campaign: "Campagne" };
+
 const DemoSlides = () => {
-  const [view, setView] = useState<"dc" | "ppm">("dc");
+  const [view, setView] = useState<View>("dc");
 
   return (
     <div className="flex h-screen flex-col bg-background">
-      {/* Toggle bar */}
       <div className="flex items-center justify-center gap-2 border-b border-border py-3">
-        <button
-          onClick={() => setView("dc")}
-          className={`rounded-full px-5 py-2 text-sm font-semibold transition-all ${
-            view === "dc"
-              ? "bg-primary text-primary-foreground shadow"
-              : "text-muted-foreground hover:text-foreground hover:bg-muted"
-          }`}
-        >
-          Pistes DC
-        </button>
-        <button
-          onClick={() => setView("ppm")}
-          className={`rounded-full px-5 py-2 text-sm font-semibold transition-all ${
-            view === "ppm"
-              ? "bg-primary text-primary-foreground shadow"
-              : "text-muted-foreground hover:text-foreground hover:bg-muted"
-          }`}
-        >
-          PPM
-        </button>
+        {views.map((v) => (
+          <button
+            key={v}
+            onClick={() => setView(v)}
+            className={`rounded-full px-5 py-2 text-sm font-semibold transition-all ${
+              view === v
+                ? "bg-primary text-primary-foreground shadow"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted"
+            }`}
+          >
+            {viewLabels[v]}
+          </button>
+        ))}
       </div>
 
-      {/* Slide area */}
       <div className="flex-1 overflow-hidden">
-        {view === "dc" ? (
-          <DCPresentation
-            metadata={mockDCMetadata}
-            onSelectPiste={(id) => console.log("Selected piste:", id)}
-          />
-        ) : (
-          <PPMPresentation metadata={mockPPMMetadata} />
+        {view === "dc" && (
+          <DCPresentation metadata={mockDCMetadata} onSelectPiste={(id) => console.log("Selected piste:", id)} />
         )}
+        {view === "ppm" && <PPMPresentation metadata={mockPPMMetadata} />}
+        {view === "campaign" && <CampaignGallery metadata={mockCampaignMetadata} />}
       </div>
     </div>
   );
