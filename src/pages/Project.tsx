@@ -247,6 +247,7 @@ const ProjectPage = () => {
         <div className="relative flex-1">
           <OutputPanel
             artifacts={artifacts}
+            briefData={briefData}
             onSelectPiste={handleSelectPiste}
             onApprove={handleApprove}
             onReject={handleReject}
