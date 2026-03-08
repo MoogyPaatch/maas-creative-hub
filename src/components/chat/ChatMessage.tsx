@@ -8,7 +8,7 @@ interface Props {
   onQuickReply?: (id: string) => void;
 }
 
-const ChatMessage = ({ message, isLast, onQuickReply }: Props) => {
+const ChatMessageBubble = ({ message, isLast, onQuickReply }: Props) => {
   const isUser = message.role === "user";
 
   return (
