@@ -8,7 +8,6 @@ import {
   getProject,
   getProjectStatus,
   getBrief,
-  updateBrief,
   sendMessageSSE,
   approveValidation,
   rejectValidation,
@@ -197,15 +196,11 @@ const ProjectPage = () => {
     }
   }, [handleSSEStream]);
 
-  const handleBriefChange = useCallback(async (newContent: string) => {
-    if (!id) return;
-    try {
-      await updateBrief(id, { content: newContent });
-      toast.success("Brief mis à jour");
-    } catch {
-      toast.error("Impossible de sauvegarder le brief");
-    }
-  }, [id]);
+  // File attach placeholder
+  const handleAttach = useCallback((files: FileList) => {
+    const names = Array.from(files).map(f => f.name).join(", ");
+    toast.info(`Fichier(s) reçu(s) : ${names} — l'upload sera disponible prochainement.`);
+  }, []);
 
   if (loading) {
     return (
@@ -254,6 +249,7 @@ const ProjectPage = () => {
             thinking={thinking}
             onSendMessage={handleSendMessage}
             onQuickReply={handleQuickReply}
+            onAttach={handleAttach}
             isStreaming={isStreaming}
           />
         </div>
@@ -264,7 +260,7 @@ const ProjectPage = () => {
             onSelectPiste={handleSelectPiste}
             onApprove={handleApprove}
             onReject={handleReject}
-            onBriefChange={handleBriefChange}
+            currentStep={projectStatus?.current_step || "commercial"}
           />
         </div>
       </div>
@@ -296,6 +292,7 @@ const ProjectPage = () => {
               thinking={thinking}
               onSendMessage={handleSendMessage}
               onQuickReply={handleQuickReply}
+              onAttach={handleAttach}
               isStreaming={isStreaming}
             />
           ) : (
@@ -305,7 +302,7 @@ const ProjectPage = () => {
               onSelectPiste={handleSelectPiste}
               onApprove={handleApprove}
               onReject={handleReject}
-              onBriefChange={handleBriefChange}
+              currentStep={projectStatus?.current_step || "commercial"}
             />
           )}
         </div>
