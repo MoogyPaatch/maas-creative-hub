@@ -1,12 +1,12 @@
-import { useState, useRef } from "react";
-import { Send } from "lucide-react";
+import { useState, useRef, forwardRef } from "react";
+import { Send, Paperclip } from "lucide-react";
 
 interface Props {
   onSend: (message: string) => void;
   disabled?: boolean;
 }
 
-const ChatInput = ({ onSend, disabled }: Props) => {
+const ChatInput = forwardRef<HTMLDivElement, Props>(({ onSend, disabled }, ref) => {
   const [value, setValue] = useState("");
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -15,6 +15,10 @@ const ChatInput = ({ onSend, disabled }: Props) => {
     if (!trimmed || disabled) return;
     onSend(trimmed);
     setValue("");
+    // Reset textarea height
+    if (inputRef.current) {
+      inputRef.current.style.height = "auto";
+    }
     inputRef.current?.focus();
   };
 
@@ -26,7 +30,7 @@ const ChatInput = ({ onSend, disabled }: Props) => {
   };
 
   return (
-    <div className="border-t border-border bg-card p-4">
+    <div ref={ref} className="border-t border-border bg-card p-4">
       <div className="flex items-end gap-3 rounded-xl border border-border bg-surface px-4 py-3 focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20 transition-all">
         <textarea
           ref={inputRef}
@@ -47,13 +51,15 @@ const ChatInput = ({ onSend, disabled }: Props) => {
         <button
           onClick={handleSubmit}
           disabled={disabled || !value.trim()}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-30"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-30 active:scale-95"
         >
           <Send className="h-4 w-4" />
         </button>
       </div>
     </div>
   );
-};
+});
+
+ChatInput.displayName = "ChatInput";
 
 export default ChatInput;

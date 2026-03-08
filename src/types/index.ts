@@ -107,9 +107,10 @@ export type WorkflowStep =
   | "dc_visual"
   | "dc_copy"
   | "ppm"
-  | "prod"
-  | "canvas"
-  | "livraison";
+  | "prod_image"
+  | "prod_video"
+  | "prod_audio"
+  | "delivered";
 
 export const WORKFLOW_STEPS: { key: WorkflowStep; label: string }[] = [
   { key: "commercial", label: "Brief" },
@@ -117,6 +118,8 @@ export const WORKFLOW_STEPS: { key: WorkflowStep; label: string }[] = [
   { key: "dc_visual", label: "Direction Créative" },
   { key: "dc_copy", label: "Copywriting" },
   { key: "ppm", label: "Pré-Production" },
-  { key: "prod", label: "Production" },
-  { key: "canvas", label: "Livraison" },
+  { key: "prod_image", label: "Production" },
+  { key: "prod_video", label: "Vidéo" },
+  { key: "prod_audio", label: "Audio" },
+  { key: "delivered", label: "Livraison" },
 ];
