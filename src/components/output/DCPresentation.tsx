@@ -264,6 +264,26 @@ function PisteSlide({
   );
 }
 
+function RecommendationEncadre({ recommendation }: { recommendation?: AgencyRecommendation }) {
+  if (!recommendation?.why) return null;
+  return (
+    <div className="border-t border-border bg-primary/5 px-6 py-4 space-y-2">
+      <div className="flex items-center gap-2">
+        <Star className="h-4 w-4 fill-primary text-primary" />
+        <span className="text-xs font-bold uppercase tracking-wider text-primary">
+          {recommendation.recommendation_title || "Recommandation Marcel"}
+        </span>
+      </div>
+      <p className="text-sm leading-relaxed text-foreground">{recommendation.why}</p>
+      {recommendation.what_if_not && (
+        <p className="text-xs leading-relaxed text-muted-foreground italic">
+          Alternative : {recommendation.what_if_not}
+        </p>
+      )}
+    </div>
+  );
+}
+
 const DCPresentation = ({ metadata, onSelectPiste }: Props) => {
   const pistes = metadata.pistes || [];
   const recommendation = metadata.agency_recommendation;
@@ -293,13 +313,18 @@ const DCPresentation = ({ metadata, onSelectPiste }: Props) => {
   );
 
   return (
-    <SlideShell
-      slides={slides}
-      title="Direction Créative"
-      titleIcon={Sparkles}
-      slidesUrl={metadata.slides_url}
-      pptxUrl={metadata.pptx_url}
-    />
+    <div className="flex h-full flex-col">
+      <div className="flex-1 min-h-0">
+        <SlideShell
+          slides={slides}
+          title="Direction Créative"
+          titleIcon={Sparkles}
+          slidesUrl={metadata.slides_url}
+          pptxUrl={metadata.pptx_url}
+        />
+      </div>
+      <RecommendationEncadre recommendation={recommendation} />
+    </div>
   );
 };
 
