@@ -59,17 +59,21 @@ const emptyStateByStep: Record<string, { icon: React.ElementType; title: string;
   default: { icon: Rocket, title: "Espace créatif", desc: "Les livrables apparaîtront ici au fil de la conversation." },
 };
 
-const OutputPanel = ({ artifacts, briefData, messages = [], onSelectPiste, onApprove, onReject, brandAssets = [], onBrandAssetsChange, highlightAssetCategories, showAssetsTab = true, onBriefChange, currentStep }: Props) => {
+const OutputPanel = ({ artifacts, briefData, messages = [], onSelectPiste, onApprove, onReject, brandAssets = [], onBrandAssetsChange, highlightAssetCategories, showAssetsTab = true, onBriefChange, currentStep, isClientView = false }: Props) => {
+  // Types hidden from client view (internal agency artifacts)
+  const agencyOnlyTypes = new Set(["creative_brief", "dc_copy_result"]);
+
   const typedArtifacts = artifacts.filter((a) => a.metadata?.type);
   
   const displayItems: { type: string; content?: string; metadata?: any }[] = [];
   
-  if (briefData) {
+  if (briefData && !isClientView) {
     displayItems.push({ type: "creative_brief", content: briefToMarkdown(briefData) });
   }
   
   typedArtifacts.forEach((a) => {
     if (a.metadata?.type === "creative_brief" && briefData) return;
+    if (isClientView && agencyOnlyTypes.has(a.metadata!.type)) return;
     displayItems.push({ type: a.metadata!.type, content: a.metadata?.content, metadata: a.metadata });
   });
 
