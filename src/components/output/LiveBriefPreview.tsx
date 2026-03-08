@@ -234,7 +234,7 @@ const LiveBriefPreview = ({ messages, onBriefChange }: Props) => {
                             className="w-full bg-transparent border-none text-sm text-foreground outline-none placeholder:text-muted-foreground/50"
                             value={displayValue}
                             placeholder={field.placeholder}
-                            onChange={(e) => handleFieldChange(field.key, e.target.value)}
+                            onChange={(e) => handleFieldChange(String(field.key), e.target.value)}
                             onBlur={() => setEditingField(null)}
                             onKeyDown={(e) => {
                               if (e.key === "Enter" || e.key === "Escape") setEditingField(null);
