@@ -33,6 +33,8 @@ const ProjectPage = () => {
   useEffect(() => {
     if (!id) return;
 
+    const isAgency = user?.role === "agency" || user?.role === "admin";
+
     const init = async () => {
       try {
         // Try to get existing project status
@@ -43,7 +45,7 @@ const ProjectPage = () => {
         const project = await getProject(id);
         if (project.latest_conversation_id) {
           // Create conversation to get messages
-          const conv = await createConversation(id, true, project.supervisor_phase || "commercial");
+          const conv = await createConversation(id, isAgency, isAgency ? (project.supervisor_phase || "commercial") : null);
           setConversationId(conv.conversation_id);
           
           // Map existing messages
@@ -64,7 +66,7 @@ const ProjectPage = () => {
           setArtifacts(existingArtifacts);
         } else {
           // New conversation
-          const conv = await createConversation(id, true, "commercial");
+          const conv = await createConversation(id, isAgency, isAgency ? "commercial" : null);
           setConversationId(conv.conversation_id);
           const existingMessages: ChatMessage[] = (conv.messages || []).map((m: any) => ({
             role: m.role === "user" ? "user" : "agent",
@@ -78,7 +80,7 @@ const ProjectPage = () => {
         console.error("Init error:", err);
         // Fallback: create new conversation
         try {
-          const conv = await createConversation(id, true, "commercial");
+          const conv = await createConversation(id, isAgency, isAgency ? "commercial" : null);
           setConversationId(conv.conversation_id);
           const existingMessages: ChatMessage[] = (conv.messages || []).map((m: any) => ({
             role: m.role === "user" ? "user" : "agent",
@@ -96,7 +98,7 @@ const ProjectPage = () => {
     };
 
     init();
-  }, [id]);
+  }, [id, user]);
 
   const handleSSEStream = useCallback(async (stream: ReadableStream<Uint8Array> | null) => {
     if (!stream) return;
