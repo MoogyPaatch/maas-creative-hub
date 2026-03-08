@@ -29,7 +29,8 @@ const Projects = () => {
   const handleNew = async () => {
     setCreating(true);
     try {
-      const conv = await createConversation(null, true, "commercial");
+      const isAgency = user?.role === "agency" || user?.role === "admin";
+      const conv = await createConversation(null, isAgency, isAgency ? "commercial" : null);
       navigate(`/project/${conv.project_id}`);
     } catch {
       setCreating(false);
@@ -43,7 +44,10 @@ const Projects = () => {
       dc_visual: "Direction Créative",
       dc_copy: "Copywriting",
       ppm: "Pré-Production",
-      prod: "Production",
+      prod_image: "Production Image",
+      prod_video: "Production Vidéo",
+      prod_audio: "Production Audio",
+      delivered: "Livré",
     };
     return phase ? map[phase] || phase : "Nouveau";
   };

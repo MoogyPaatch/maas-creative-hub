@@ -32,12 +32,13 @@ const ChatMessageBubble = ({ message, isLast, onQuickReply }: Props) => {
               : "bg-chat-agent text-chat-agent-foreground rounded-bl-md"
           }`}
         >
-          <div className="prose prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-li:my-0.5">
+          <div className="prose prose-sm max-w-none dark:prose-invert prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-li:my-0.5 prose-p:text-inherit prose-headings:text-inherit prose-strong:text-inherit prose-li:text-inherit prose-a:text-primary">
             <ReactMarkdown>{message.content}</ReactMarkdown>
           </div>
         </div>
 
-        {isLast && message.quickReplies && message.quickReplies.length > 0 && (
+        {/* Only show quick replies on the last agent message */}
+        {isLast && !isUser && message.quickReplies && message.quickReplies.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 5 }}
             animate={{ opacity: 1, y: 0 }}
@@ -48,7 +49,7 @@ const ChatMessageBubble = ({ message, isLast, onQuickReply }: Props) => {
               <button
                 key={qr.id}
                 onClick={() => onQuickReply?.(qr.id)}
-                className="rounded-full border border-border bg-surface px-4 py-2 text-xs font-medium text-foreground transition-all hover:border-primary hover:text-primary hover:bg-primary/5"
+                className="rounded-full border border-border bg-surface px-4 py-2 text-xs font-medium text-foreground transition-all hover:border-primary hover:text-primary hover:bg-primary/5 active:scale-95"
               >
                 {qr.label}
               </button>
