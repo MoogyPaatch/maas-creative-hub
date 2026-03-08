@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import CreativeBrief from "./CreativeBrief";
 import DCPresentation from "./DCPresentation";
@@ -92,10 +92,14 @@ const OutputPanel = ({ artifacts, briefData, messages = [], onSelectPiste, onApp
     }
   }, [showLiveBrief, messages.length]);
 
+  // Auto-switch to latest artifact when new ones arrive
+  const prevDisplayCount = useRef(displayItems.length);
   useEffect(() => {
-    if (displayItems.length > 0 && activeTab !== "assets" && activeTab !== "canvas" && activeTab !== "live-brief") {
+    if (displayItems.length > prevDisplayCount.current) {
+      // New artifact arrived — always switch to it
       setActiveTab(displayItems.length - 1);
     }
+    prevDisplayCount.current = displayItems.length;
   }, [displayItems.length]);
 
   // When brief data arrives, switch to it
