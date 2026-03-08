@@ -39,9 +39,10 @@ const ProjectPage = () => {
 
     const init = async () => {
       try {
-        // Try to get existing project status
+        // Try to get existing project status and brief
         const status = await getProjectStatus(id).catch(() => null);
         if (status) setProjectStatus(status);
+        getBrief(id).then(setBriefData).catch(() => {});
 
         // Get project to find latest conversation
         const project = await getProject(id);
