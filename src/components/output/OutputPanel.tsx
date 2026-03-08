@@ -27,6 +27,7 @@ interface Props {
   showAssetsTab?: boolean;
   onBriefChange?: (content: string) => void;
   currentStep?: string;
+  isClientView?: boolean;
 }
 
 function briefToMarkdown(brief: BriefData): string {
