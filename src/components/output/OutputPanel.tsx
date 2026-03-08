@@ -182,6 +182,15 @@ const OutputPanel = ({ artifacts, briefData, onSelectPiste, onApprove, onReject,
                 <ValidationPanel gate={active.metadata.gate || ""} validationId={active.metadata.validation_id || ""} content={active.metadata.content || ""} onApprove={onApprove} onReject={onReject} />
               </motion.div>
             )}
+            {active?.type === "delivery" && active.metadata && (
+              <motion.div key={`delivery-${activeIndex}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="h-full">
+                <DeliveryPanel
+                  zipUrl={active.metadata.zip_url}
+                  assets={active.metadata.production_assets || []}
+                  campaignTitle={active.metadata.campaign_title}
+                />
+              </motion.div>
+            )}
           </AnimatePresence>
         </ErrorBoundary>
       </div>
