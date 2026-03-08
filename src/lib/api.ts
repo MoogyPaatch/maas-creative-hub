@@ -11,15 +11,16 @@ function authHeaders(): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+async function request<T>(path: string, options: RequestInit & { silent404?: boolean } = {}): Promise<T> {
+  const { silent404, ...fetchOptions } = options;
   let res: Response;
   try {
     res = await fetch(`${API_URL}${path}`, {
-      ...options,
+      ...fetchOptions,
       headers: {
         "Content-Type": "application/json",
         ...authHeaders(),
-        ...options.headers,
+        ...fetchOptions.headers,
       },
     });
   } catch (err) {
@@ -35,7 +36,9 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    toast.error(`Erreur API : ${res.status}`);
+    if (!(silent404 && res.status === 404)) {
+      toast.error(`Erreur API : ${res.status}`);
+    }
     throw new Error(`API Error ${res.status}: ${text}`);
   }
   return res.json();
@@ -191,7 +194,7 @@ export async function rejectValidation(id: string, feedback: string) {
 
 // Brief
 export async function getBrief(projectId: string) {
-  return request<any>(`/projects/${projectId}/brief`);
+  return request<any>(`/projects/${projectId}/brief`, { silent404: true });
 }
 
 export async function updateBrief(projectId: string, briefData: Record<string, unknown>) {
