@@ -91,6 +91,7 @@ const OutputPanel = ({ artifacts, briefData, onSelectPiste, onApprove, onReject 
     dc_presentation: "Pistes DC",
     dc_copy_result: "Copy",
     ppm_presentation: "PPM",
+    campaign_gallery: "Campagne",
     validation_required: "Validation",
   };
 
