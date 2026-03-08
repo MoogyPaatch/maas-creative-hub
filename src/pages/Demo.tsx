@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import ChatPanel from "@/components/chat/ChatPanel";
 import OutputPanel from "@/components/output/OutputPanel";
 import WorkflowStepper from "@/components/layout/WorkflowStepper";
-import type { ChatMessage, PipelineStep, WorkflowStep, MessageMetadata, DCPiste } from "@/types";
+import type { ChatMessage, PipelineStep, WorkflowStep, BrandAsset, DCPiste } from "@/types";
 import { ArrowLeft, Eye } from "lucide-react";
 
 /* ═══════════════════════════════════════════════
@@ -125,11 +125,26 @@ const DEMO_MESSAGES: DemoMessage[] = [
     content: "✅ Valider le brief",
   },
 
+  // ─── ASSET REQUEST (post-brief) ───
+  {
+    phase: "commercial",
+    role: "agent",
+    content: "Brief validé ! 🎯 Avant de passer aux pistes créatives, j'aurais besoin de quelques éléments de votre marque pour nourrir la direction artistique :\n\n📎 **Logo** en haute définition (SVG ou PNG)\n📎 **Visuels produit** — packshots et/ou photos ambiance du flacon\n📎 **Charte graphique** si vous en avez une (PDF)\n\nVous pouvez les déposer dans l'onglet **Assets** à droite, ou passer pour l'instant — je pourrai travailler avec des références génériques.",
+    quickReplies: [
+      { id: "qr-open-assets", label: "📎 Voir les assets" },
+      { id: "qr-skip-assets", label: "Passer pour l'instant" },
+    ],
+    metadata: {
+      type: "asset_request",
+      requested_asset_categories: ["logo", "product", "guidelines"],
+    },
+  },
+
   // ─── DIRECTION CRÉATIVE ───
   {
     phase: "dc_visual",
     role: "agent",
-    content: "Brief validé ! 🎯 Après analyse stratégique du marché de la parfumerie premium, voici **3 pistes créatives** pour « Éclat Urbain » ! 🎨\n\nChaque piste propose un univers visuel distinct avec sa propre direction artistique. Explorez-les dans le panneau de droite et choisissez celle qui vous parle le plus.",
+    content: "Très bien ! 🎨 Après analyse stratégique du marché de la parfumerie premium, voici **3 pistes créatives** pour « Éclat Urbain » !\n\nChaque piste propose un univers visuel distinct avec sa propre direction artistique. Explorez-les dans le panneau de droite et choisissez celle qui vous parle le plus.",
     metadata: {
       type: "dc_presentation",
       pistes: mockPistes,
@@ -269,21 +284,25 @@ const demoBriefData = {
 const DemoPage = () => {
   const navigate = useNavigate();
   const [activeStep, setActiveStep] = useState<WorkflowStep>("commercial");
+  const [brandAssets, setBrandAssets] = useState<BrandAsset[]>([]);
 
   const pipeline = useMemo(() => buildPipeline(activeStep), [activeStep]);
 
-  // Filter messages up to the selected step
   const visibleMessages = useMemo(() => {
     const stepIdx = STEP_ORDER.indexOf(activeStep);
     return DEMO_MESSAGES.filter((m) => STEP_ORDER.indexOf(m.phase) <= stepIdx) as ChatMessage[];
   }, [activeStep]);
 
-  // Collect artifacts from visible messages
   const visibleArtifacts = useMemo(() => {
-    return visibleMessages.filter((m) => m.metadata?.type) as ChatMessage[];
+    return visibleMessages.filter((m) => m.metadata?.type && m.metadata.type !== "asset_request") as ChatMessage[];
   }, [visibleMessages]);
 
-  // Show brief data once we're past commercial
+  // Check if there's an asset_request in visible messages to highlight categories
+  const highlightCategories = useMemo(() => {
+    const req = visibleMessages.find((m) => m.metadata?.type === "asset_request");
+    return req?.metadata?.requested_asset_categories;
+  }, [visibleMessages]);
+
   const showBrief = STEP_ORDER.indexOf(activeStep) >= STEP_ORDER.indexOf("commercial");
 
   const handleStepClick = useCallback((step: WorkflowStep) => {
@@ -347,6 +366,9 @@ const DemoPage = () => {
             onSelectPiste={() => {}}
             onApprove={() => {}}
             onReject={() => {}}
+            brandAssets={brandAssets}
+            onBrandAssetsChange={setBrandAssets}
+            highlightAssetCategories={highlightCategories}
           />
         </div>
       </div>

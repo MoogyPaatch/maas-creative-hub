@@ -76,6 +76,20 @@ export interface MessageMetadata {
   production_assets?: ProductionAsset[];
   campaign_title?: string;
   zip_url?: string;
+  // Asset Request
+  requested_asset_categories?: BrandAssetCategory[];
+}
+
+export type BrandAssetCategory = "logo" | "product" | "guidelines" | "typography" | "graphics";
+
+export interface BrandAsset {
+  id: string;
+  category: BrandAssetCategory;
+  file_name: string;
+  file_size: string;
+  file_type: string;
+  preview_url: string;
+  uploaded_at: string;
 }
 
 export interface ProductionAsset {
