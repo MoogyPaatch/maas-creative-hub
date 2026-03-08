@@ -79,6 +79,10 @@ export async function createConversation(
   });
 }
 
+export async function getConversation(conversationId: string) {
+  return request<any>(`/conversations/${conversationId}`);
+}
+
 export async function sendMessageSSE(
   conversationId: string,
   type: "text" | "quick_reply",
