@@ -45,6 +45,7 @@ const AppRoutes = () => {
         <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
         <Route path="/project/:id" element={<ProtectedRoute><ProjectPage /></ProtectedRoute>} />
         <Route path="/" element={<Navigate to="/projects" replace />} />
+        <Route path="/demo-slides" element={<DemoSlides />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </AuthProvider>
