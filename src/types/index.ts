@@ -76,6 +76,8 @@ export interface MessageMetadata {
   production_assets?: ProductionAsset[];
   campaign_title?: string;
   zip_url?: string;
+  // Asset Request
+  requested_asset_categories?: BrandAssetCategory[];
 }
 
 export type BrandAssetCategory = "logo" | "product" | "guidelines" | "typography" | "graphics";
