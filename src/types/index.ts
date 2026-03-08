@@ -80,6 +80,21 @@ export interface MessageMetadata {
   requested_asset_categories?: BrandAssetCategory[];
 }
 
+export interface CanvasElement {
+  id: string;
+  type: "image" | "text";
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  zIndex: number;
+  src?: string;
+  text?: string;
+  fontSize?: number;
+  color?: string;
+}
+
 export type BrandAssetCategory = "logo" | "product" | "guidelines" | "typography" | "graphics";
 
 export interface BrandAsset {
