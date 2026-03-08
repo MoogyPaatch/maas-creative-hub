@@ -303,9 +303,9 @@ function buildPipeline(upToStep: WorkflowStep): PipelineStep[] {
   const idx = STEP_ORDER.indexOf(upToStep);
   return STEP_ORDER.map((step, i) => ({
     step,
-    status: i < idx ? "completed" : i === idx ? "in_progress" : "pending",
-    started_at: i <= idx ? new Date().toISOString() : null,
-    completed_at: i < idx ? new Date().toISOString() : null,
+    status: i === idx ? "in_progress" : "completed",
+    started_at: new Date().toISOString(),
+    completed_at: i !== idx ? new Date().toISOString() : null,
   }));
 }
 
