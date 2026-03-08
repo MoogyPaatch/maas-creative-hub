@@ -38,7 +38,7 @@ const ChatPanel = ({ messages, thinking, onSendMessage, onQuickReply, isStreamin
 
       <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto p-5 scrollbar-thin">
         {messages.map((msg, i) => (
-          <ChatMessageComponent
+          <ChatMessageBubble
             key={i}
             message={msg}
             isLast={i === messages.length - 1}
