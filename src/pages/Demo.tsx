@@ -1,17 +1,22 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import ChatPanel from "@/components/chat/ChatPanel";
 import OutputPanel from "@/components/output/OutputPanel";
 import WorkflowStepper from "@/components/layout/WorkflowStepper";
-import type { ChatMessage, PipelineStep, WorkflowStep, BrandAsset, DCPiste } from "@/types";
-import { ArrowLeft, Eye } from "lucide-react";
+import ThemeToggle from "@/components/ThemeToggle";
+import ErrorBoundary from "@/components/ErrorBoundary";
+import type { ChatMessage, PipelineStep, WorkflowStep, BrandAsset, DCPiste, BriefData } from "@/types";
+import { ArrowLeft, Eye, Menu, X } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 
 /* ═══════════════════════════════════════════════
-   MOCK DATA — Full conversation simulation
+   MOCK DATA
    ═══════════════════════════════════════════════ */
 
 interface DemoMessage extends ChatMessage {
   phase: WorkflowStep;
+  /** For matching quick reply triggers */
+  triggeredByQR?: string;
 }
 
 const mockPistes: DCPiste[] = [
@@ -77,6 +82,19 @@ Audacieux, contemporain, premium
 ## Timing
 Lancement campagne : 15 avril 2026`;
 
+// QR ID to step advancement mapping
+const QR_STEP_MAP: Record<string, { nextMessageCount: number; nextStep?: WorkflowStep }> = {
+  "qr-parfum": { nextMessageCount: 2 },
+  "qr-mode": { nextMessageCount: 2 },
+  "qr-autre": { nextMessageCount: 2 },
+  "qr-budget-100": { nextMessageCount: 2 },
+  "qr-budget-150": { nextMessageCount: 2 },
+  "qr-budget-200": { nextMessageCount: 2 },
+  "qr-validate-brief": { nextMessageCount: 2 },
+  "qr-open-assets": { nextMessageCount: 0 },
+  "qr-skip-assets": { nextMessageCount: 1, nextStep: "dc_visual" },
+};
+
 const DEMO_MESSAGES: DemoMessage[] = [
   // ─── BRIEF CLIENT ───
   {
@@ -124,8 +142,7 @@ const DEMO_MESSAGES: DemoMessage[] = [
     role: "user",
     content: "✅ Valider le brief",
   },
-
-  // ─── ASSET REQUEST (post-brief) ───
+  // ─── ASSET REQUEST ───
   {
     phase: "commercial",
     role: "agent",
@@ -139,7 +156,6 @@ const DEMO_MESSAGES: DemoMessage[] = [
       requested_asset_categories: ["logo", "product", "guidelines"],
     },
   },
-
   // ─── DIRECTION CRÉATIVE ───
   {
     phase: "dc_visual",
@@ -163,7 +179,6 @@ const DEMO_MESSAGES: DemoMessage[] = [
     role: "agent",
     content: "Excellent choix ! 🔥 « L'Éclat Urbain » est la piste la plus audacieuse — elle va vraiment marquer les esprits.\n\nJe lance la déclinaison des textes et la pré-production sur cette direction.",
   },
-
   // ─── PRÉ-PRODUCTION ───
   {
     phase: "ppm",
@@ -213,7 +228,6 @@ const DEMO_MESSAGES: DemoMessage[] = [
     role: "user",
     content: "Le storyboard est top. On valide la pré-prod, on peut lancer la production !",
   },
-
   // ─── LIVRAISON ───
   {
     phase: "delivered",
@@ -248,24 +262,21 @@ const DEMO_MESSAGES: DemoMessage[] = [
 ];
 
 /* Only 4 client-visible steps */
-const STEP_ORDER: WorkflowStep[] = [
-  "commercial", "dc_visual", "ppm", "delivered",
-];
+const STEP_ORDER: WorkflowStep[] = ["commercial", "dc_visual", "ppm", "delivered"];
 
 function buildPipeline(upToStep: WorkflowStep): PipelineStep[] {
   return STEP_ORDER.map((step, i) => {
     const idx = STEP_ORDER.indexOf(upToStep);
     return {
       step,
-      status: i === idx ? "in_progress" : "completed",
-      started_at: new Date().toISOString(),
-      completed_at: i !== idx ? new Date().toISOString() : null,
+      status: i < idx ? "completed" : i === idx ? "in_progress" : "pending",
+      started_at: i <= idx ? new Date().toISOString() : null,
+      completed_at: i < idx ? new Date().toISOString() : null,
     };
   });
 }
 
-/* Brief data for OutputPanel */
-const demoBriefData = {
+const demoBriefData: BriefData = {
   brand: "Maison Lumière",
   product: "Parfum « Éclat Urbain » — Eau de Parfum 75ml",
   objective: "Lancer le nouveau parfum avec une campagne digitale multi-canal visant à générer 50 000 ventes en 3 mois",
@@ -277,36 +288,119 @@ const demoBriefData = {
   timing: "Lancement campagne : 15 avril 2026",
 };
 
+const STORAGE_KEY = "maas-demo-state";
+
 /* ═══════════════════════════════════════════════
-   DEMO PAGE COMPONENT
+   DEMO PAGE
    ═══════════════════════════════════════════════ */
 
 const DemoPage = () => {
   const navigate = useNavigate();
-  const [activeStep, setActiveStep] = useState<WorkflowStep>("commercial");
+  
+  // Restore persisted state
+  const savedState = useMemo(() => {
+    try {
+      const s = localStorage.getItem(STORAGE_KEY);
+      return s ? JSON.parse(s) : null;
+    } catch { return null; }
+  }, []);
+
+  const [activeStep, setActiveStep] = useState<WorkflowStep>(savedState?.activeStep || "commercial");
+  const [visibleCount, setVisibleCount] = useState<number>(savedState?.visibleCount || 1);
   const [brandAssets, setBrandAssets] = useState<BrandAsset[]>([]);
+  const [thinking, setThinking] = useState<string | null>(null);
+  const [mobilePanel, setMobilePanel] = useState<"chat" | "output">("chat");
+
+  // Persist state
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ activeStep, visibleCount }));
+  }, [activeStep, visibleCount]);
 
   const pipeline = useMemo(() => buildPipeline(activeStep), [activeStep]);
 
   const visibleMessages = useMemo(() => {
-    const stepIdx = STEP_ORDER.indexOf(activeStep);
-    return DEMO_MESSAGES.filter((m) => STEP_ORDER.indexOf(m.phase) <= stepIdx) as ChatMessage[];
-  }, [activeStep]);
+    return DEMO_MESSAGES.slice(0, visibleCount) as ChatMessage[];
+  }, [visibleCount]);
 
   const visibleArtifacts = useMemo(() => {
     return visibleMessages.filter((m) => m.metadata?.type && m.metadata.type !== "asset_request") as ChatMessage[];
   }, [visibleMessages]);
 
-  // Check if there's an asset_request in visible messages to highlight categories
   const highlightCategories = useMemo(() => {
     const req = visibleMessages.find((m) => m.metadata?.type === "asset_request");
     return req?.metadata?.requested_asset_categories;
   }, [visibleMessages]);
 
-  const showBrief = STEP_ORDER.indexOf(activeStep) >= STEP_ORDER.indexOf("commercial");
+  // Determine the step from the visible messages
+  useEffect(() => {
+    if (visibleCount <= 0) return;
+    const lastMsg = DEMO_MESSAGES[visibleCount - 1] as DemoMessage | undefined;
+    if (lastMsg) {
+      setActiveStep(lastMsg.phase);
+    }
+  }, [visibleCount]);
+
+  const showBrief = STEP_ORDER.indexOf(activeStep) >= STEP_ORDER.indexOf("commercial") && visibleCount >= 5;
+
+  // Advance conversation by N messages with thinking animation
+  const advanceMessages = useCallback((count: number, step?: WorkflowStep) => {
+    if (count <= 0) return;
+    setThinking("Marcel réfléchit...");
+    let added = 0;
+    const interval = setInterval(() => {
+      added++;
+      setVisibleCount(prev => Math.min(DEMO_MESSAGES.length, prev + 1));
+      if (added >= count) {
+        clearInterval(interval);
+        setThinking(null);
+        if (step) setActiveStep(step);
+      }
+    }, 800);
+  }, []);
+
+  const handleQuickReply = useCallback((qrId: string) => {
+    const mapping = QR_STEP_MAP[qrId];
+    if (!mapping) return;
+    
+    if (qrId === "qr-open-assets") {
+      // Switch to assets tab — handled by OutputPanel
+      return;
+    }
+    
+    advanceMessages(mapping.nextMessageCount, mapping.nextStep);
+  }, [advanceMessages]);
+
+  const handleSendMessage = useCallback((_text: string) => {
+    // In demo, advance to next messages
+    const remaining = DEMO_MESSAGES.length - visibleCount;
+    if (remaining > 0) {
+      advanceMessages(Math.min(2, remaining));
+    }
+  }, [visibleCount, advanceMessages]);
 
   const handleStepClick = useCallback((step: WorkflowStep) => {
-    setActiveStep(step);
+    // Find first message of that step and show up to there
+    const idx = DEMO_MESSAGES.findIndex((m) => m.phase === step);
+    if (idx >= 0) {
+      // Show all messages up through the last message of that step
+      const lastIdx = DEMO_MESSAGES.reduce((acc, m, i) => (m.phase === step ? i : acc), idx);
+      setVisibleCount(lastIdx + 1);
+      setActiveStep(step);
+    }
+  }, []);
+
+  const handleAttach = useCallback((files: FileList) => {
+    // Route files to brand assets panel
+    const newAssets: BrandAsset[] = Array.from(files).map((file) => ({
+      id: `asset-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      category: "logo" as const,
+      file_name: file.name,
+      file_size: file.size < 1024 * 1024 ? `${(file.size / 1024).toFixed(0)} Ko` : `${(file.size / (1024 * 1024)).toFixed(1)} Mo`,
+      file_type: file.type,
+      preview_url: URL.createObjectURL(file),
+      uploaded_at: new Date().toISOString(),
+    }));
+    setBrandAssets(prev => [...prev, ...newAssets]);
   }, []);
 
   return (
@@ -317,13 +411,14 @@ const DemoPage = () => {
           <button
             onClick={() => navigate("/")}
             className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            aria-label="Retour"
           >
             <ArrowLeft className="h-4 w-4" />
           </button>
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary" aria-hidden>
             <span className="text-xs font-bold text-primary-foreground">M</span>
           </div>
-          <span className="text-sm font-semibold text-foreground">
+          <span className="text-sm font-semibold text-foreground hidden sm:inline">
             Maison Lumière — Éclat Urbain
           </span>
           <span className="ml-2 rounded-full bg-accent px-2.5 py-0.5 text-[10px] font-medium text-accent-foreground">
@@ -331,7 +426,7 @@ const DemoPage = () => {
           </span>
         </div>
 
-        <div className="flex-1 px-8">
+        <div className="hidden md:flex flex-1 px-8">
           <WorkflowStepper
             pipeline={pipeline}
             currentStep={activeStep}
@@ -339,37 +434,62 @@ const DemoPage = () => {
           />
         </div>
 
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Eye className="h-3.5 w-3.5" />
-          Cliquez sur une étape
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          {/* Mobile panel toggle */}
+          <button
+            onClick={() => setMobilePanel(mobilePanel === "chat" ? "output" : "chat")}
+            className="flex md:hidden h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            aria-label={mobilePanel === "chat" ? "Voir le panneau créatif" : "Voir le chat"}
+          >
+            {mobilePanel === "chat" ? <Eye className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+          </button>
+          <div className="hidden md:flex items-center gap-2 text-xs text-muted-foreground">
+            <Eye className="h-3.5 w-3.5" />
+            Cliquez sur une étape
+          </div>
         </div>
       </header>
 
+      {/* Mobile stepper */}
+      <div className="flex md:hidden border-b border-border px-4 py-2 overflow-x-auto">
+        <WorkflowStepper
+          pipeline={pipeline}
+          currentStep={activeStep}
+          onStepClick={handleStepClick}
+        />
+      </div>
+
       {/* Split View */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Chat Panel - 40% */}
-        <div className="w-[40%] min-w-[360px] border-r border-border">
-          <ChatPanel
-            messages={visibleMessages}
-            thinking={null}
-            onSendMessage={() => {}}
-            onQuickReply={() => {}}
-            isStreaming={false}
-          />
+        {/* Chat Panel */}
+        <div className={`${mobilePanel === "chat" ? "flex" : "hidden"} md:flex w-full md:w-[40%] md:min-w-[360px] border-r border-border flex-col`}>
+          <ErrorBoundary>
+            <ChatPanel
+              messages={visibleMessages}
+              thinking={thinking}
+              onSendMessage={handleSendMessage}
+              onQuickReply={handleQuickReply}
+              onAttach={handleAttach}
+              isStreaming={!!thinking}
+            />
+          </ErrorBoundary>
         </div>
 
-        {/* Output Panel - 60% */}
-        <div className="relative flex-1">
-          <OutputPanel
-            artifacts={visibleArtifacts}
-            briefData={showBrief ? demoBriefData : undefined}
-            onSelectPiste={() => {}}
-            onApprove={() => {}}
-            onReject={() => {}}
-            brandAssets={brandAssets}
-            onBrandAssetsChange={setBrandAssets}
-            highlightAssetCategories={highlightCategories}
-          />
+        {/* Output Panel */}
+        <div className={`${mobilePanel === "output" ? "flex" : "hidden"} md:flex relative flex-1 flex-col`}>
+          <ErrorBoundary>
+            <OutputPanel
+              artifacts={visibleArtifacts}
+              briefData={showBrief ? demoBriefData : undefined}
+              onSelectPiste={() => {}}
+              onApprove={() => {}}
+              onReject={() => {}}
+              brandAssets={brandAssets}
+              onBrandAssetsChange={setBrandAssets}
+              highlightAssetCategories={highlightCategories}
+            />
+          </ErrorBoundary>
         </div>
       </div>
     </div>

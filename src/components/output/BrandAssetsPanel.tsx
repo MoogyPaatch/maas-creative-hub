@@ -1,7 +1,6 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Image, Package, FileText, Type, Palette, Upload, X, Plus } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Image, Package, FileText, Type, Palette, Upload, X } from "lucide-react";
 import type { BrandAsset, BrandAssetCategory } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -30,23 +29,38 @@ const BrandAssetsPanel = ({ assets, onAssetsChange, highlightCategories }: Props
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeCat, setActiveCat] = useState<BrandAssetCategory>("logo");
   const [dragOver, setDragOver] = useState<BrandAssetCategory | null>(null);
+  const objectUrlsRef = useRef<Set<string>>(new Set());
+
+  // Cleanup object URLs on unmount
+  useEffect(() => {
+    return () => {
+      objectUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, []);
 
   const handleFiles = useCallback((files: FileList, category: BrandAssetCategory) => {
-    const newAssets: BrandAsset[] = Array.from(files).map((file) => ({
-      id: `asset-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      category,
-      file_name: file.name,
-      file_size: formatSize(file.size),
-      file_type: file.type,
-      preview_url: URL.createObjectURL(file),
-      uploaded_at: new Date().toISOString(),
-    }));
+    const newAssets: BrandAsset[] = Array.from(files).map((file) => {
+      const url = URL.createObjectURL(file);
+      objectUrlsRef.current.add(url);
+      return {
+        id: `asset-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        category,
+        file_name: file.name,
+        file_size: formatSize(file.size),
+        file_type: file.type,
+        preview_url: url,
+        uploaded_at: new Date().toISOString(),
+      };
+    });
     onAssetsChange([...assets, ...newAssets]);
   }, [assets, onAssetsChange]);
 
   const handleRemove = useCallback((id: string) => {
     const asset = assets.find((a) => a.id === id);
-    if (asset) URL.revokeObjectURL(asset.preview_url);
+    if (asset) {
+      URL.revokeObjectURL(asset.preview_url);
+      objectUrlsRef.current.delete(asset.preview_url);
+    }
     onAssetsChange(assets.filter((a) => a.id !== id));
   }, [assets, onAssetsChange]);
 
@@ -70,7 +84,6 @@ const BrandAssetsPanel = ({ assets, onAssetsChange, highlightCategories }: Props
 
   return (
     <div className="flex h-full flex-col bg-background">
-      {/* Header */}
       <div className="border-b border-border px-6 py-4">
         <div className="flex items-center justify-between">
           <div>
@@ -82,8 +95,7 @@ const BrandAssetsPanel = ({ assets, onAssetsChange, highlightCategories }: Props
         </div>
       </div>
 
-      {/* Categories */}
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2" role="list" aria-label="Catégories d'assets">
         {CATEGORIES.map((cat) => {
           const catAssets = assets.filter((a) => a.category === cat.key);
           const isExpanded = expandedCat === cat.key;
@@ -93,16 +105,18 @@ const BrandAssetsPanel = ({ assets, onAssetsChange, highlightCategories }: Props
           return (
             <div
               key={cat.key}
+              role="listitem"
               className={cn(
                 "rounded-xl border transition-all",
                 isHighlighted ? "border-primary/50 bg-primary/5" : "border-border",
                 isExpanded ? "bg-card" : "bg-card/50"
               )}
             >
-              {/* Category header */}
               <button
                 onClick={() => setExpandedCat(isExpanded ? null : cat.key)}
                 className="flex w-full items-center gap-3 px-4 py-3 text-left"
+                aria-expanded={isExpanded}
+                aria-label={`${cat.label} — ${catAssets.length} fichier${catAssets.length !== 1 ? "s" : ""}`}
               >
                 <div className={cn(
                   "flex h-8 w-8 items-center justify-center rounded-lg",
@@ -126,13 +140,12 @@ const BrandAssetsPanel = ({ assets, onAssetsChange, highlightCategories }: Props
                   transition={{ duration: 0.2 }}
                   className="text-muted-foreground"
                 >
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="shrink-0">
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="shrink-0" aria-hidden>
                     <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                 </motion.div>
               </button>
 
-              {/* Expanded content */}
               <AnimatePresence>
                 {isExpanded && (
                   <motion.div
@@ -143,11 +156,13 @@ const BrandAssetsPanel = ({ assets, onAssetsChange, highlightCategories }: Props
                     className="overflow-hidden"
                   >
                     <div className="px-4 pb-4 space-y-3">
-                      {/* Drop zone */}
                       <div
                         onDrop={(e) => handleDrop(e, cat.key)}
                         onDragOver={(e) => handleDragOver(e, cat.key)}
                         onDragLeave={() => setDragOver(null)}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`Zone de dépôt pour ${cat.label}`}
                         className={cn(
                           "flex flex-col items-center justify-center rounded-lg border-2 border-dashed py-5 transition-colors cursor-pointer",
                           dragOver === cat.key
@@ -155,6 +170,7 @@ const BrandAssetsPanel = ({ assets, onAssetsChange, highlightCategories }: Props
                             : "border-border hover:border-muted-foreground/30"
                         )}
                         onClick={() => openFilePicker(cat.key)}
+                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") openFilePicker(cat.key); }}
                       >
                         <Upload className="mb-1.5 h-5 w-5 text-muted-foreground" />
                         <span className="text-xs text-muted-foreground">
@@ -163,7 +179,6 @@ const BrandAssetsPanel = ({ assets, onAssetsChange, highlightCategories }: Props
                         </span>
                       </div>
 
-                      {/* File list */}
                       <AnimatePresence>
                         {catAssets.map((asset, i) => (
                           <motion.div
@@ -174,12 +189,12 @@ const BrandAssetsPanel = ({ assets, onAssetsChange, highlightCategories }: Props
                             transition={{ delay: i * 0.05 }}
                             className="flex items-center gap-3 rounded-lg border border-border bg-background p-2"
                           >
-                            {/* Thumbnail */}
                             {asset.file_type.startsWith("image/") ? (
                               <img
                                 src={asset.preview_url}
                                 alt={asset.file_name}
                                 className="h-10 w-10 rounded-md object-cover"
+                                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                               />
                             ) : (
                               <div className="flex h-10 w-10 items-center justify-center rounded-md bg-muted">
@@ -193,6 +208,7 @@ const BrandAssetsPanel = ({ assets, onAssetsChange, highlightCategories }: Props
                             <button
                               onClick={() => handleRemove(asset.id)}
                               className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+                              aria-label={`Supprimer ${asset.file_name}`}
                             >
                               <X className="h-3.5 w-3.5" />
                             </button>
@@ -208,7 +224,6 @@ const BrandAssetsPanel = ({ assets, onAssetsChange, highlightCategories }: Props
         })}
       </div>
 
-      {/* Hidden file input */}
       <input
         ref={fileInputRef}
         type="file"
