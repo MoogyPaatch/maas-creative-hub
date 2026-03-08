@@ -44,6 +44,57 @@ export interface QuickReply {
   label: string;
 }
 
+// ── Client Brief Draft (11 fields, SSE-driven) ──────────────────────────
+
+export interface ClientBriefDraft {
+  brand: string | null;
+  product: string | null;
+  objective: string | null;
+  target: string | null;
+  tone: string | null;
+  formats: string | null;
+  promise: string | null;
+  reason_to_believe: string | null;
+  creative_references: string | null;
+  constraints: string | null;
+  additional_context: string | null;
+}
+
+export const CLIENT_BRIEF_REQUIRED_FIELDS: (keyof ClientBriefDraft)[] = [
+  "brand", "objective", "target", "tone", "formats",
+];
+
+export const CLIENT_BRIEF_QUASI_REQUIRED_FIELDS: (keyof ClientBriefDraft)[] = [
+  "product",
+];
+
+export const CLIENT_BRIEF_ENRICHMENT_FIELDS: (keyof ClientBriefDraft)[] = [
+  "promise", "reason_to_believe", "creative_references", "constraints", "additional_context",
+];
+
+export interface ClientBriefFieldDef {
+  key: keyof ClientBriefDraft;
+  label: string;
+  placeholder: string;
+  tier: "required" | "quasi" | "enrichment";
+}
+
+export const CLIENT_BRIEF_FIELD_DEFS: ClientBriefFieldDef[] = [
+  { key: "brand", label: "Marque", placeholder: "Ex: Lidl, Nike, Renault...", tier: "required" },
+  { key: "objective", label: "Objectif", placeholder: "Ex: Lancement produit, notoriété...", tier: "required" },
+  { key: "target", label: "Cible", placeholder: "Ex: 25-35 ans, urbains, tech-savvy", tier: "required" },
+  { key: "tone", label: "Tonalité", placeholder: "Ex: Premium, décalé, authentique...", tier: "required" },
+  { key: "formats", label: "Formats & Médias", placeholder: "Ex: Social media, TV, print...", tier: "required" },
+  { key: "product", label: "Produit / Service", placeholder: "Ex: Nouvelle gamme sneakers", tier: "quasi" },
+  { key: "promise", label: "Promesse consommateur", placeholder: "Ex: Le confort sans compromis", tier: "enrichment" },
+  { key: "reason_to_believe", label: "Raison de croire", placeholder: "Ex: Technologie brevetée, études cliniques...", tier: "enrichment" },
+  { key: "creative_references", label: "Références créatives", placeholder: "Ex: J'aime la campagne Apple \"Think Different\"", tier: "enrichment" },
+  { key: "constraints", label: "Contraintes", placeholder: "Ex: Mention légale obligatoire, pas de rouge...", tier: "enrichment" },
+  { key: "additional_context", label: "Contexte additionnel", placeholder: "Tout ce qui est important et ne rentre pas dans les cases", tier: "enrichment" },
+];
+
+// ── Legacy BriefData (kept for creative brief compatibility) ─────────────
+
 export interface BriefData {
   brand: string;
   product: string;
@@ -57,6 +108,8 @@ export interface BriefData {
   [key: string]: unknown;
 }
 
+// ── Message Metadata ─────────────────────────────────────────────────────
+
 export interface MessageMetadata {
   type: string;
   content?: string;
@@ -65,6 +118,8 @@ export interface MessageMetadata {
   piste_thumbnail_urls?: string[];
   piste_titles?: string[];
   pistes?: DCPiste[];
+  agency_recommendation?: AgencyRecommendation;
+  brief_draft?: Partial<ClientBriefDraft>;
   headlines?: Array<{ format: string; text: string; variant: string }>;
   body_copy?: Array<{ format: string; text: string; word_count: number }>;
   video_scripts?: Array<{ duration: string; script: string }>;
@@ -85,7 +140,54 @@ export interface MessageMetadata {
   campaign_title?: string;
   zip_url?: string;
   requested_asset_categories?: BrandAssetCategory[];
+  // status_update fields
+  status?: string;
+  phase_label?: string;
 }
+
+// ── DC Piste (enriched) ──────────────────────────────────────────────────
+
+export interface DCPiste {
+  id: string;
+  title: string;
+  headline: string;
+  concept: string;
+  tone: string;
+  justification: string;
+  thumbnail_url: string;
+  risk_level?: "safe" | "bold" | "provocateur";
+  agency_conviction?: string;
+  differentiation?: string;
+  format_executions?: {
+    social?: string;
+    print?: string;
+    digital?: string;
+  };
+  video_concept?: {
+    concept_summary: string;
+    tone_video: string;
+    music_direction: string;
+    duration_target: string;
+    sequences: Array<{
+      sequence: number;
+      timing: string;
+      visual: string;
+      text_on_screen?: string;
+      voiceover?: string;
+      sound?: string;
+      transition?: string;
+    }>;
+  };
+}
+
+export interface AgencyRecommendation {
+  recommended_piste: number;
+  recommendation_title?: string;
+  why?: string;
+  what_if_not?: string;
+}
+
+// ── Canvas / Assets / Production ─────────────────────────────────────────
 
 export interface CanvasElement {
   id: string;
@@ -125,15 +227,7 @@ export interface ProductionAsset {
   file_size?: string;
 }
 
-export interface DCPiste {
-  id: string;
-  title: string;
-  headline: string;
-  concept: string;
-  tone: string;
-  justification: string;
-  thumbnail_url: string;
-}
+// ── Chat ─────────────────────────────────────────────────────────────────
 
 export interface ChatMessage {
   id?: string;
@@ -160,6 +254,8 @@ export interface ConversationResponse {
   artifacts: ChatMessage[];
 }
 
+// ── Workflow ─────────────────────────────────────────────────────────────
+
 export type WorkflowStep =
   | "commercial"
   | "planner"
@@ -171,7 +267,6 @@ export type WorkflowStep =
   | "prod_audio"
   | "delivered";
 
-// Full pipeline for agency view
 export const WORKFLOW_STEPS: { key: WorkflowStep; label: string; shortLabel: string }[] = [
   { key: "commercial", label: "Brief Client", shortLabel: "Brief" },
   { key: "planner", label: "Stratégie Créative", shortLabel: "Stratégie" },
@@ -184,7 +279,6 @@ export const WORKFLOW_STEPS: { key: WorkflowStep; label: string; shortLabel: str
   { key: "delivered", label: "Livraison", shortLabel: "Livré" },
 ];
 
-// Simplified pipeline for client view (only validation milestones)
 export const CLIENT_WORKFLOW_STEPS: { key: WorkflowStep; label: string; shortLabel: string }[] = [
   { key: "commercial", label: "Brief Client", shortLabel: "Brief" },
   { key: "dc_visual", label: "Direction Créative", shortLabel: "Création" },
