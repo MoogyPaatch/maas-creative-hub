@@ -13,6 +13,7 @@ import {
   Pause,
   Package,
   PenTool,
+} from "lucide-react";
 import type { MessageMetadata, ProductionAsset } from "@/types";
 
 interface Props {
