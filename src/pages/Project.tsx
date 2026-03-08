@@ -174,6 +174,25 @@ const ProjectPage = () => {
         if (id) {
           getProjectStatus(id).then(setProjectStatus).catch(() => {});
           getBrief(id).then(setBriefData).catch(() => {});
+          getPPM(id).then((ppmData) => {
+            if (ppmData) {
+              setArtifacts((prev) => {
+                const idx = prev.findIndex((a) => a.metadata?.type === "ppm_presentation");
+                const newArtifact: ChatMessage = {
+                  role: "agent",
+                  content: "",
+                  metadata: { type: "ppm_presentation", ...ppmData },
+                };
+                if (idx >= 0) {
+                  // Replace with fresh data
+                  const updated = [...prev];
+                  updated[idx] = newArtifact;
+                  return updated;
+                }
+                return [...prev, newArtifact];
+              });
+            }
+          }).catch(() => {});
         }
       },
       (label) => setThinking(label)
