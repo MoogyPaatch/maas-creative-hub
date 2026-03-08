@@ -5,11 +5,12 @@ import DCPresentation from "./DCPresentation";
 import DCCopyResult from "./DCCopyResult";
 import PPMPresentation from "./PPMPresentation";
 import CampaignGallery from "./CampaignGallery";
+import CreativeCanvas from "./CreativeCanvas";
 import ValidationPanel from "./ValidationPanel";
 import BrandAssetsPanel from "./BrandAssetsPanel";
-import type { ChatMessage, BrandAsset, BrandAssetCategory } from "@/types";
+import type { ChatMessage, BrandAsset, BrandAssetCategory, ProductionAsset } from "@/types";
 import { motion } from "framer-motion";
-import { Sparkles, FolderOpen } from "lucide-react";
+import { Sparkles, FolderOpen, PenTool } from "lucide-react";
 
 interface Props {
   artifacts: ChatMessage[];
@@ -60,17 +61,23 @@ const OutputPanel = ({ artifacts, briefData, onSelectPiste, onApprove, onReject,
 
   // "brand_assets" is a permanent virtual tab, always first when enabled
   const hasAssetsTab = showAssetsTab && onBrandAssetsChange;
+  
+  // Check if campaign_gallery exists to show canvas tab
+  const galleryArtifact = displayItems.find(d => d.type === "campaign_gallery");
+  const galleryAssets: ProductionAsset[] = galleryArtifact?.metadata?.production_assets || [];
+  const hasCanvasTab = galleryAssets.length > 0;
 
-  const [activeTab, setActiveTab] = useState<"assets" | number>(hasAssetsTab ? "assets" : 0);
+  const [activeTab, setActiveTab] = useState<"assets" | "canvas" | number>(hasAssetsTab ? "assets" : 0);
+  const [canvasActive, setCanvasActive] = useState(false);
 
   useEffect(() => {
-    if (displayItems.length > 0 && activeTab !== "assets") {
+    if (displayItems.length > 0 && activeTab !== "assets" && activeTab !== "canvas") {
       setActiveTab(displayItems.length - 1);
     }
   }, [displayItems.length]);
 
-  // Auto-switch to latest artifact when new ones arrive, but keep assets if user chose it
-  const activeIndex = activeTab === "assets" ? -1 : (activeTab as number);
+  // Auto-switch to latest artifact when new ones arrive, but keep assets/canvas if user chose it
+  const activeIndex = activeTab === "assets" || activeTab === "canvas" ? -1 : (activeTab as number);
   const active = activeIndex >= 0 ? displayItems[activeIndex] || null : null;
 
   const showEmpty = !hasAssetsTab && !active;
@@ -125,6 +132,23 @@ const OutputPanel = ({ artifacts, briefData, onSelectPiste, onApprove, onReject,
               />
             </motion.div>
           )}
+          {activeTab === "canvas" && hasCanvasTab && (
+            <motion.div
+              key="canvas"
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98 }}
+              className="h-full"
+            >
+              <CreativeCanvas
+                assets={galleryAssets}
+                onBack={() => {
+                  const idx = displayItems.findIndex(d => d.type === "campaign_gallery");
+                  setActiveTab(idx >= 0 ? idx : 0);
+                }}
+              />
+            </motion.div>
+          )}
           {active?.type === "creative_brief" && active.content && (
             <CreativeBrief key={`brief-${activeIndex}`} content={active.content} onContentChange={(newContent) => {
               active.content = newContent;
@@ -140,7 +164,7 @@ const OutputPanel = ({ artifacts, briefData, onSelectPiste, onApprove, onReject,
             <PPMPresentation key={`ppm-${activeIndex}`} metadata={active.metadata} />
           )}
           {active?.type === "campaign_gallery" && active.metadata && (
-            <CampaignGallery key={`gallery-${activeIndex}`} metadata={active.metadata} />
+            <CampaignGallery key={`gallery-${activeIndex}`} metadata={active.metadata} onOpenCanvas={() => setActiveTab("canvas")} />
           )}
           {active?.type === "validation_required" && active.metadata && onApprove && onReject && (
             <div key={`validation-${activeIndex}`} className="flex h-full items-center justify-center p-8">
@@ -192,6 +216,20 @@ const OutputPanel = ({ artifacts, briefData, onSelectPiste, onApprove, onReject,
                 {labels[item.type] || item.type}
               </button>
             ))}
+            {/* Canvas tab — visible when gallery exists */}
+            {hasCanvasTab && (
+              <button
+                onClick={() => setActiveTab("canvas")}
+                className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition-all ${
+                  activeTab === "canvas"
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                }`}
+              >
+                <PenTool className="h-3 w-3" />
+                Canevas
+              </button>
+            )}
           </div>
         </div>
       )}
