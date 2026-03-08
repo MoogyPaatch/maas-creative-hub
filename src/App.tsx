@@ -2,10 +2,12 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import { AnimatePresence, motion } from "framer-motion";
 import Login from "./pages/Login";
+import Index from "./pages/Index";
 import Projects from "./pages/Projects";
 import ProjectPage from "./pages/Project";
 import NotFound from "./pages/NotFound";
@@ -39,18 +41,36 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+const pageTransition = {
+  initial: { opacity: 0, y: 8 },
+  animate: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: -8 },
+  transition: { duration: 0.25, ease: [0.25, 0.46, 0.45, 0.94] },
+};
+
+function AnimatedRoutes() {
+  const location = useLocation();
+  return (
+    <AnimatePresence mode="wait">
+      <motion.div key={location.pathname} {...pageTransition} className="h-full">
+        <Routes location={location}>
+          <Route path="/" element={<Index />} />
+          <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+          <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
+          <Route path="/project/:id" element={<ProtectedRoute><ProjectPage /></ProtectedRoute>} />
+          <Route path="/demo" element={<DemoPage />} />
+          <Route path="/demo-slides" element={<DemoSlides />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </motion.div>
+    </AnimatePresence>
+  );
+}
+
 const AppRoutes = () => {
   return (
     <AuthProvider>
-      <Routes>
-        <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
-        <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
-        <Route path="/project/:id" element={<ProtectedRoute><ProjectPage /></ProtectedRoute>} />
-        <Route path="/" element={<Navigate to="/projects" replace />} />
-        <Route path="/demo" element={<DemoPage />} />
-        <Route path="/demo-slides" element={<DemoSlides />} />
-        <Route path="*" element={<NotFound />} />
-      </Routes>
+      <AnimatedRoutes />
     </AuthProvider>
   );
 };
