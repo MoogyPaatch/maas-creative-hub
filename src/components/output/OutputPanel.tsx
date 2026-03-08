@@ -9,6 +9,7 @@ import CreativeCanvas from "./CreativeCanvas";
 import ValidationPanel from "./ValidationPanel";
 import BrandAssetsPanel from "./BrandAssetsPanel";
 import DeliveryPanel from "./DeliveryPanel";
+import LiveBriefPreview from "./LiveBriefPreview";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import type { ChatMessage, BrandAsset, BrandAssetCategory, ProductionAsset, BriefData } from "@/types";
 import { Sparkles, FolderOpen, PenTool, FileText, Palette, Film, Rocket, Package } from "lucide-react";
@@ -16,6 +17,7 @@ import { Sparkles, FolderOpen, PenTool, FileText, Palette, Film, Rocket, Package
 interface Props {
   artifacts: ChatMessage[];
   briefData?: BriefData;
+  messages?: ChatMessage[];
   onSelectPiste?: (pisteId: string) => void;
   onApprove?: (id: string, feedback: string | null) => void;
   onReject?: (id: string, feedback: string) => void;
@@ -49,7 +51,6 @@ function briefToMarkdown(brief: BriefData): string {
 }
 
 const emptyStateByStep: Record<string, { icon: React.ElementType; title: string; desc: string }> = {
-  commercial: { icon: FileText, title: "En attente du brief…", desc: "Discutez avec Marcel pour définir votre brief stratégique. Il apparaîtra ici." },
   planner: { icon: Sparkles, title: "Stratégie en cours…", desc: "Marcel analyse votre brief et prépare les pistes créatives." },
   dc_visual: { icon: Palette, title: "Direction artistique…", desc: "Les pistes visuelles sont en cours de génération." },
   dc_copy: { icon: PenTool, title: "Copy en création…", desc: "Marcel rédige les messages et accroches de votre campagne." },
@@ -57,7 +58,7 @@ const emptyStateByStep: Record<string, { icon: React.ElementType; title: string;
   default: { icon: Rocket, title: "Espace créatif", desc: "Les livrables apparaîtront ici au fil de la conversation." },
 };
 
-const OutputPanel = ({ artifacts, briefData, onSelectPiste, onApprove, onReject, brandAssets = [], onBrandAssetsChange, highlightAssetCategories, showAssetsTab = true, onBriefChange, currentStep }: Props) => {
+const OutputPanel = ({ artifacts, briefData, messages = [], onSelectPiste, onApprove, onReject, brandAssets = [], onBrandAssetsChange, highlightAssetCategories, showAssetsTab = true, onBriefChange, currentStep }: Props) => {
   const typedArtifacts = artifacts.filter((a) => a.metadata?.type);
   
   const displayItems: { type: string; content?: string; metadata?: any }[] = [];
@@ -76,18 +77,38 @@ const OutputPanel = ({ artifacts, briefData, onSelectPiste, onApprove, onReject,
   const galleryAssets: ProductionAsset[] = galleryArtifact?.metadata?.production_assets || [];
   const hasCanvasTab = galleryAssets.length > 0;
 
-  const [activeTab, setActiveTab] = useState<"assets" | "canvas" | number>(hasAssetsTab ? "assets" : 0);
+  // Show live brief during commercial phase when no formal brief exists yet
+  const isCommercialPhase = currentStep === "commercial";
+  const showLiveBrief = isCommercialPhase && !briefData && messages.length > 0;
+
+  const [activeTab, setActiveTab] = useState<"assets" | "canvas" | "live-brief" | number>(
+    showLiveBrief ? "live-brief" : hasAssetsTab ? "assets" : 0
+  );
+
+  // Auto-switch to live brief when messages come in during commercial phase
+  useEffect(() => {
+    if (showLiveBrief && activeTab !== "live-brief" && displayItems.length === 0) {
+      setActiveTab("live-brief");
+    }
+  }, [showLiveBrief, messages.length]);
 
   useEffect(() => {
-    if (displayItems.length > 0 && activeTab !== "assets" && activeTab !== "canvas") {
+    if (displayItems.length > 0 && activeTab !== "assets" && activeTab !== "canvas" && activeTab !== "live-brief") {
       setActiveTab(displayItems.length - 1);
     }
   }, [displayItems.length]);
 
-  const activeIndex = activeTab === "assets" || activeTab === "canvas" ? -1 : (activeTab as number);
+  // When brief data arrives, switch to it
+  useEffect(() => {
+    if (briefData && activeTab === "live-brief") {
+      setActiveTab(0);
+    }
+  }, [briefData]);
+
+  const activeIndex = activeTab === "assets" || activeTab === "canvas" || activeTab === "live-brief" ? -1 : (activeTab as number);
   const active = activeIndex >= 0 ? displayItems[activeIndex] || null : null;
 
-  const showEmpty = !hasAssetsTab && !active;
+  const showEmpty = !hasAssetsTab && !active && !showLiveBrief && activeTab !== "live-brief";
 
   if (showEmpty) {
     const stepInfo = emptyStateByStep[currentStep || ""] || emptyStateByStep.default;
@@ -103,18 +124,17 @@ const OutputPanel = ({ artifacts, briefData, onSelectPiste, onApprove, onReject,
           <motion.div
             animate={{ y: [0, -6, 0] }}
             transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-            className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-primary/10"
+            className="mx-auto mb-6 flex h-20 w-20 items-center justify-center bg-secondary"
           >
-            <Icon className="h-9 w-9 text-primary" />
+            <Icon className="h-9 w-9 text-foreground" />
           </motion.div>
-          <h3 className="text-lg font-semibold text-foreground">{stepInfo.title}</h3>
+          <h3 className="text-lg font-bold text-foreground">{stepInfo.title}</h3>
           <p className="mt-2 max-w-sm text-sm text-muted-foreground">{stepInfo.desc}</p>
-          {/* Animated dots */}
           <div className="mt-6 flex justify-center gap-1.5">
             {[0, 1, 2].map((i) => (
               <motion.div
                 key={i}
-                className="h-1.5 w-1.5 rounded-full bg-primary/40"
+                className="h-1.5 w-1.5 bg-foreground/30"
                 animate={{ opacity: [0.3, 1, 0.3] }}
                 transition={{ duration: 1.5, repeat: Infinity, delay: i * 0.3 }}
               />
@@ -142,6 +162,11 @@ const OutputPanel = ({ artifacts, briefData, onSelectPiste, onApprove, onReject,
       <div className="flex-1 overflow-hidden">
         <ErrorBoundary>
           <AnimatePresence mode="wait">
+            {activeTab === "live-brief" && showLiveBrief && (
+              <motion.div key="live-brief" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="h-full">
+                <LiveBriefPreview messages={messages} />
+              </motion.div>
+            )}
             {activeTab === "assets" && onBrandAssetsChange && (
               <motion.div key="brand-assets" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }} className="h-full">
                 <BrandAssetsPanel assets={brandAssets} onAssetsChange={onBrandAssetsChange} highlightCategories={highlightAssetCategories} />
@@ -195,27 +220,38 @@ const OutputPanel = ({ artifacts, briefData, onSelectPiste, onApprove, onReject,
         </ErrorBoundary>
       </div>
 
-      {(hasAssetsTab || displayItems.length > 1) && (
-        <div className="flex justify-center border-t border-border bg-card/50 px-4 py-3 backdrop-blur-sm">
-          <div className="flex gap-1.5 rounded-full border border-border bg-card px-2 py-1 overflow-x-auto scrollbar-thin max-w-full">
+      {(hasAssetsTab || displayItems.length > 1 || showLiveBrief) && (
+        <div className="flex justify-center border-t border-border px-4 py-3">
+          <div className="flex gap-1 overflow-x-auto scrollbar-thin max-w-full">
+            {showLiveBrief && (
+              <button
+                onClick={() => setActiveTab("live-brief")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap ${
+                  activeTab === "live-brief" ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <FileText className="h-3 w-3" />
+                Brief Live
+              </button>
+            )}
             {hasAssetsTab && (
               <button
                 onClick={() => setActiveTab("assets")}
-                className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition-all whitespace-nowrap ${
-                  activeTab === "assets" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap ${
+                  activeTab === "assets" ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 <FolderOpen className="h-3 w-3" />
                 Assets
-                {assetCount > 0 && <span className="ml-0.5 rounded-full bg-primary-foreground/20 px-1.5 text-[10px]">{assetCount}</span>}
+                {assetCount > 0 && <span className="ml-0.5 text-[10px]">({assetCount})</span>}
               </button>
             )}
             {displayItems.map((item, i) => (
               <button
                 key={i}
                 onClick={() => setActiveTab(i)}
-                className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-all whitespace-nowrap ${
-                  activeTab === i ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                className={`px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap ${
+                  activeTab === i ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 {labels[item.type] || item.type}
@@ -224,8 +260,8 @@ const OutputPanel = ({ artifacts, briefData, onSelectPiste, onApprove, onReject,
             {hasCanvasTab && (
               <button
                 onClick={() => setActiveTab("canvas")}
-                className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition-all whitespace-nowrap ${
-                  activeTab === "canvas" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap ${
+                  activeTab === "canvas" ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 <PenTool className="h-3 w-3" />
