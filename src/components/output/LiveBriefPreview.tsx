@@ -1,107 +1,98 @@
 import { useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { FileText, MessageSquare, Target, Megaphone, Users, DollarSign, Clock, Zap } from "lucide-react";
+import { FileText, MessageSquare, Loader2 } from "lucide-react";
 import type { ChatMessage } from "@/types";
 
 interface Props {
   messages: ChatMessage[];
 }
 
-interface BriefField {
-  key: string;
-  label: string;
-  icon: React.ElementType;
-  value: string | null;
-}
-
 /**
- * Extracts brief-like information from conversation messages in real-time.
- * Parses agent responses to identify brand, product, objective, etc.
+ * Instead of regex-parsing user input, we display the agent's
+ * interpreted summaries. The backend AI already understands context
+ * and reformulates — we just present its understanding cleanly.
  */
-function extractBriefFromMessages(messages: ChatMessage[]): BriefField[] {
-  const allText = messages
-    .filter((m) => m.role === "agent" || m.role === "user")
-    .map((m) => m.content)
-    .join("\n");
+function extractAgentSummary(messages: ChatMessage[]): {
+  agentUnderstanding: string | null;
+  questionsAsked: string[];
+  userInputs: string[];
+  phase: "waiting" | "collecting" | "confirming";
+} {
+  const agentMessages = messages.filter((m) => m.role === "agent");
+  const userMessages = messages.filter((m) => m.role === "user" && !m.content.startsWith("📎"));
 
-  const userMessages = messages.filter((m) => m.role === "user").map((m) => m.content);
-  const agentMessages = messages.filter((m) => m.role === "agent").map((m) => m.content);
+  // The agent's last substantive message contains its current understanding
+  const lastAgent = agentMessages.length > 0 ? agentMessages[agentMessages.length - 1] : null;
 
-  // Try to extract structured info from agent summaries
-  const fields: BriefField[] = [];
+  // Find the agent message that contains a brief summary (usually starts with "Je retiens", "J'ai bien reçu", etc.)
+  const summaryPatterns = [
+    /je retiens\b/i,
+    /j'ai bien re[cç]u/i,
+    /voici ce que j'ai compris/i,
+    /récapitul/i,
+    /brief.*:/i,
+    /campagne\s+(?:sur|pour)\s+/i,
+  ];
 
-  // Brand / Client
-  const brandMatch = allText.match(/(?:marque|brand|client)\s*[:—]\s*(.+)/i)
-    || agentMessages.join(" ").match(/campagne\s+(?:sur|pour)\s+(.+?)(?:\s+avec|\s*[.,])/i);
-  fields.push({
-    key: "brand",
-    label: "Marque / Client",
-    icon: Megaphone,
-    value: brandMatch?.[1]?.trim() || null,
-  });
+  let agentUnderstanding: string | null = null;
 
-  // Product
-  const productMatch = allText.match(/(?:produit|product)\s*[:—]\s*(.+)/i);
-  fields.push({
-    key: "product",
-    label: "Produit",
-    icon: Target,
-    value: productMatch?.[1]?.trim() || null,
-  });
-
-  // Objective
-  const objectiveMatch = allText.match(/(?:objectif|objective|but)\s*[:—]\s*(.+)/i)
-    || agentMessages.join(" ").match(/objectif\s+de\s+(.+?)(?:\.|$)/i);
-  fields.push({
-    key: "objective",
-    label: "Objectif",
-    icon: Zap,
-    value: objectiveMatch?.[1]?.trim() || null,
-  });
-
-  // Target audience
-  const audienceMatch = allText.match(/(?:cible|audience|target)\s*[:—]\s*(.+)/i);
-  fields.push({
-    key: "audience",
-    label: "Cible",
-    icon: Users,
-    value: audienceMatch?.[1]?.trim() || null,
-  });
-
-  // Budget
-  const budgetMatch = allText.match(/(?:budget)\s*[:—]\s*(.+)/i);
-  fields.push({
-    key: "budget",
-    label: "Budget",
-    icon: DollarSign,
-    value: budgetMatch?.[1]?.trim() || null,
-  });
-
-  // Timing
-  const timingMatch = allText.match(/(?:timing|deadline|calendrier|délai)\s*[:—]\s*(.+)/i);
-  fields.push({
-    key: "timing",
-    label: "Timing",
-    icon: Clock,
-    value: timingMatch?.[1]?.trim() || null,
-  });
-
-  // If no structured data found, use the last substantive user message as context
-  if (fields.every((f) => !f.value) && userMessages.length > 0) {
-    const lastSubstantive = userMessages.filter((m) => m.length > 10 && !m.startsWith("📎")).pop();
-    if (lastSubstantive) {
-      fields[0].value = lastSubstantive;
+  // Search from most recent to oldest for a summary
+  for (let i = agentMessages.length - 1; i >= 0; i--) {
+    const content = agentMessages[i].content;
+    if (summaryPatterns.some((p) => p.test(content))) {
+      agentUnderstanding = content;
+      break;
     }
   }
 
-  return fields;
+  // If no explicit summary, use the last agent message if it's not just a greeting
+  if (!agentUnderstanding && lastAgent && lastAgent.content.length > 60) {
+    agentUnderstanding = lastAgent.content;
+  }
+
+  // Extract questions the agent has asked (lines ending with ?)
+  const questionsAsked: string[] = [];
+  agentMessages.forEach((m) => {
+    const lines = m.content.split("\n");
+    lines.forEach((line) => {
+      const trimmed = line.trim();
+      if (trimmed.endsWith("?") && trimmed.length > 15) {
+        questionsAsked.push(trimmed);
+      }
+    });
+  });
+
+  // User inputs (for context display)
+  const userInputs = userMessages
+    .map((m) => m.content)
+    .filter((c) => c.length > 5);
+
+  // Determine phase
+  let phase: "waiting" | "collecting" | "confirming" = "waiting";
+  if (userMessages.length === 0) {
+    phase = "waiting";
+  } else if (lastAgent?.content.match(/confirm|c'est bon|on continue|valide/i)) {
+    phase = "confirming";
+  } else {
+    phase = "collecting";
+  }
+
+  return { agentUnderstanding, questionsAsked, userInputs, phase };
 }
 
+const phaseConfig = {
+  waiting: { label: "En attente de vos informations", color: "text-muted-foreground" },
+  collecting: { label: "Collecte d'informations en cours", color: "text-foreground" },
+  confirming: { label: "En attente de confirmation", color: "text-accent" },
+};
+
 const LiveBriefPreview = ({ messages }: Props) => {
-  const fields = useMemo(() => extractBriefFromMessages(messages), [messages]);
-  const filledFields = fields.filter((f) => f.value);
-  const emptyFields = fields.filter((f) => !f.value);
-  const progress = Math.round((filledFields.length / fields.length) * 100);
+  const { agentUnderstanding, questionsAsked, userInputs, phase } = useMemo(
+    () => extractAgentSummary(messages),
+    [messages]
+  );
+
+  const config = phaseConfig[phase];
 
   return (
     <motion.div
@@ -118,102 +109,93 @@ const LiveBriefPreview = ({ messages }: Props) => {
             </div>
             <div>
               <h2 className="text-lg font-bold text-foreground">Brief en construction</h2>
-              <p className="text-xs text-muted-foreground font-medium">
-                Se remplit au fil de la conversation
+              <p className="text-xs font-medium text-muted-foreground">
+                Interprété par Marcel AI en temps réel
               </p>
             </div>
           </div>
 
-          {/* Progress bar */}
-          <div className="flex items-center gap-3">
-            <div className="h-1 flex-1 bg-secondary overflow-hidden">
-              <motion.div
-                className="h-full bg-foreground"
-                initial={{ width: 0 }}
-                animate={{ width: `${progress}%` }}
-                transition={{ duration: 0.5, ease: "easeOut" }}
-              />
-            </div>
-            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-              {filledFields.length}/{fields.length}
+          {/* Phase indicator */}
+          <div className="flex items-center gap-2">
+            {phase === "collecting" && (
+              <Loader2 className="h-3 w-3 animate-spin text-foreground" />
+            )}
+            <span className={`text-[10px] font-bold uppercase tracking-wider ${config.color}`}>
+              {config.label}
             </span>
           </div>
         </div>
 
-        {/* Filled fields */}
-        <div className="space-y-4 mb-8">
-          <AnimatePresence mode="popLayout">
-            {filledFields.map((field, i) => {
-              const Icon = field.icon;
-              return (
-                <motion.div
-                  key={field.key}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 20 }}
-                  transition={{ delay: i * 0.05 }}
-                  className="border border-border p-4"
-                >
-                  <div className="flex items-center gap-2 mb-2">
-                    <Icon className="h-3.5 w-3.5 text-foreground" />
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                      {field.label}
-                    </span>
-                  </div>
-                  <p className="text-sm text-foreground font-medium leading-relaxed">{field.value}</p>
-                </motion.div>
-              );
-            })}
-          </AnimatePresence>
-        </div>
-
-        {/* Empty fields - what's still needed */}
-        {emptyFields.length > 0 && (
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-3">
-              En attente d'informations
+        {/* Agent's understanding — the AI-interpreted brief */}
+        {agentUnderstanding ? (
+          <div className="mb-8">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                Compréhension de Marcel
+              </span>
+            </div>
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={agentUnderstanding.slice(0, 50)}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="border border-border p-6"
+              >
+                <p className="text-sm text-foreground leading-relaxed whitespace-pre-line">
+                  {agentUnderstanding}
+                </p>
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        ) : (
+          <div className="mb-8 border border-dashed border-border p-8 text-center">
+            <p className="text-sm text-muted-foreground">
+              Décrivez votre projet dans le chat — Marcel interprétera et structurera votre brief ici.
             </p>
-            <div className="grid grid-cols-2 gap-2">
-              {emptyFields.map((field) => {
-                const Icon = field.icon;
-                return (
-                  <div
-                    key={field.key}
-                    className="flex items-center gap-2 border border-dashed border-border p-3"
-                  >
-                    <Icon className="h-3.5 w-3.5 text-muted-foreground/40" />
-                    <span className="text-xs text-muted-foreground/60 font-medium">{field.label}</span>
-                  </div>
-                );
-              })}
+          </div>
+        )}
+
+        {/* What Marcel is asking */}
+        {questionsAsked.length > 0 && (
+          <div className="mb-8">
+            <div className="flex items-center gap-2 mb-3">
+              <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                Questions posées par Marcel
+              </span>
+            </div>
+            <div className="space-y-2">
+              {questionsAsked.slice(-5).map((q, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.05 }}
+                  className="border-l-2 border-border pl-4 py-1"
+                >
+                  <p className="text-xs text-muted-foreground leading-relaxed">{q}</p>
+                </motion.div>
+              ))}
             </div>
           </div>
         )}
 
-        {/* Conversation summary */}
-        {messages.length > 2 && (
-          <div className="mt-8 border-t border-border pt-6">
+        {/* User inputs summary */}
+        {userInputs.length > 0 && (
+          <div>
             <div className="flex items-center gap-2 mb-3">
-              <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />
               <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                Derniers échanges
+                Vos informations
               </span>
             </div>
-            <div className="space-y-2">
-              {messages.slice(-4).map((msg, i) => (
-                <div
+            <div className="flex flex-wrap gap-2">
+              {userInputs.slice(-6).map((input, i) => (
+                <span
                   key={i}
-                  className={`text-xs leading-relaxed ${
-                    msg.role === "user"
-                      ? "text-foreground font-medium"
-                      : "text-muted-foreground"
-                  }`}
+                  className="border border-border px-3 py-1.5 text-xs font-medium text-foreground"
                 >
-                  <span className="text-[10px] font-bold uppercase tracking-wider mr-2">
-                    {msg.role === "user" ? "Vous" : "Marcel"}
-                  </span>
-                  {msg.content.length > 120 ? msg.content.slice(0, 120) + "…" : msg.content}
-                </div>
+                  {input.length > 60 ? input.slice(0, 60) + "…" : input}
+                </span>
               ))}
             </div>
           </div>
