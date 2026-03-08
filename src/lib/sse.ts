@@ -9,6 +9,7 @@ export async function parseSSEStream(
   const reader = stream.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  let messageCount = 0;
 
   try {
     while (true) {
@@ -41,6 +42,7 @@ export async function parseSSEStream(
                 metadata: data.metadata || undefined,
                 timestamp: new Date(),
               });
+              messageCount++;
             }
           } catch {
             // Skip malformed JSON
@@ -50,6 +52,13 @@ export async function parseSSEStream(
     }
   } finally {
     reader.releaseLock();
+    if (messageCount === 0) {
+      onMessage({
+        role: "agent",
+        content: "La connexion a été interrompue. Veuillez renvoyer votre message.",
+        timestamp: new Date(),
+      });
+    }
     onDone?.();
   }
 }

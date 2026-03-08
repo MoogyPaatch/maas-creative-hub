@@ -1,4 +1,4 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useMemo } from "react";
 import { AnimatePresence } from "framer-motion";
 import ChatMessageBubble from "./ChatMessage";
 import ChatInput from "./ChatInput";
@@ -22,6 +22,14 @@ const ChatPanel = ({ messages, thinking, onSendMessage, onQuickReply, onAttach, 
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, thinking]);
+
+  // Show quick replies on the last agent message that has them
+  const lastQRIndex = useMemo(
+    () => messages.reduce((acc, msg, i) =>
+      msg.role === "agent" && msg.quickReplies?.length ? i : acc, -1
+    ),
+    [messages]
+  );
 
   return (
     <div className="flex h-full flex-col bg-card">
@@ -47,7 +55,7 @@ const ChatPanel = ({ messages, thinking, onSendMessage, onQuickReply, onAttach, 
           <ChatMessageBubble
             key={i}
             message={msg}
-            isLast={i === messages.length - 1}
+            showQuickReplies={i === lastQRIndex}
             onQuickReply={onQuickReply}
           />
         ))}

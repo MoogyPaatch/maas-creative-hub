@@ -1,12 +1,14 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 import {
   createConversation,
   getConversation,
   getProject,
   getProjectStatus,
   getBrief,
+  updateBrief,
   sendMessageSSE,
   approveValidation,
   rejectValidation,
@@ -31,6 +33,7 @@ const ProjectPage = () => {
   const [projectStatus, setProjectStatus] = useState<ProjectStatus | null>(null);
   const [briefData, setBriefData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [mobileTab, setMobileTab] = useState<"chat" | "output">("chat");
 
   // Initialize conversation
   useEffect(() => {
@@ -48,7 +51,7 @@ const ProjectPage = () => {
         getBrief(id).then(setBriefData).catch(() => {});
 
         const currentStep = status?.current_step || project.supervisor_phase || "commercial";
-        const targetAgent = isAgency ? currentStep : currentStep;
+        const targetAgent = isAgency ? (currentStep || "commercial") : null;
 
         // Try to load existing conversation first
         let conv: any = null;
@@ -77,7 +80,9 @@ const ProjectPage = () => {
         setArtifacts(existingArtifacts);
       } catch (err) {
         console.error("Init error:", err);
+        toast.error("Erreur de chargement du projet");
         try {
+          const isAgency = user?.role === "agency" || user?.role === "admin";
           const conv = await createConversation(id, isAgency, "commercial");
           setConversationId(conv.conversation_id);
           const existingMessages: ChatMessage[] = (conv.messages || []).map((m: any) => ({
@@ -88,7 +93,7 @@ const ProjectPage = () => {
           }));
           setMessages(existingMessages);
         } catch {
-          // ignore
+          toast.error("Impossible de créer la conversation");
         }
       } finally {
         setLoading(false);
@@ -111,6 +116,7 @@ const ProjectPage = () => {
         // Check for artifacts
         if (msg.metadata?.type) {
           setArtifacts((prev) => [...prev, msg]);
+          setMobileTab("output"); // Auto-switch on mobile
         }
       },
       () => {
@@ -133,6 +139,7 @@ const ProjectPage = () => {
       const stream = await sendMessageSSE(conversationId, "text", text);
       await handleSSEStream(stream);
     } catch (err) {
+      toast.error("Impossible d'envoyer le message. Vérifiez votre connexion.");
       setMessages((prev) => [
         ...prev,
         { role: "agent", content: "Désolé, une erreur est survenue. Veuillez réessayer." },
@@ -144,7 +151,6 @@ const ProjectPage = () => {
 
   const handleQuickReply = useCallback(async (qrId: string) => {
     if (!conversationId) return;
-    // Find label for display
     const lastAgentMsg = [...messages].reverse().find((m) => m.role === "agent" && m.quickReplies);
     const label = lastAgentMsg?.quickReplies?.find((qr) => qr.id === qrId)?.label || qrId;
     setMessages((prev) => [...prev, { role: "user", content: label, timestamp: new Date() }]);
@@ -152,6 +158,7 @@ const ProjectPage = () => {
       const stream = await sendMessageSSE(conversationId, "quick_reply", qrId);
       await handleSSEStream(stream);
     } catch {
+      toast.error("Erreur lors de l'envoi de la réponse rapide");
       setIsStreaming(false);
       setThinking(null);
     }
@@ -164,6 +171,7 @@ const ProjectPage = () => {
       const stream = await sendMessageSSE(conversationId, "quick_reply", pisteId);
       await handleSSEStream(stream);
     } catch {
+      toast.error("Erreur lors de la sélection de la piste");
       setIsStreaming(false);
       setThinking(null);
     }
@@ -174,6 +182,7 @@ const ProjectPage = () => {
       const stream = await approveValidation(validationId, feedback);
       await handleSSEStream(stream);
     } catch {
+      toast.error("Erreur lors de l'approbation");
       setIsStreaming(false);
     }
   }, [handleSSEStream]);
@@ -183,9 +192,20 @@ const ProjectPage = () => {
       const stream = await rejectValidation(validationId, feedback);
       await handleSSEStream(stream);
     } catch {
+      toast.error("Erreur lors du rejet");
       setIsStreaming(false);
     }
   }, [handleSSEStream]);
+
+  const handleBriefChange = useCallback(async (newContent: string) => {
+    if (!id) return;
+    try {
+      await updateBrief(id, { content: newContent });
+      toast.success("Brief mis à jour");
+    } catch {
+      toast.error("Impossible de sauvegarder le brief");
+    }
+  }, [id]);
 
   if (loading) {
     return (
@@ -206,29 +226,28 @@ const ProjectPage = () => {
           >
             <ArrowLeft className="h-4 w-4" />
           </button>
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary">
+          <div className="hidden sm:flex h-7 w-7 items-center justify-center rounded-lg bg-primary">
             <span className="text-xs font-bold text-primary-foreground">M</span>
           </div>
-          <span className="text-sm font-semibold text-foreground">
+          <span className="hidden sm:inline text-sm font-semibold text-foreground">
             {projectStatus?.project_name || "Nouvelle campagne"}
           </span>
         </div>
 
-        <div className="flex-1 px-8">
+        <div className="flex-1 px-2 sm:px-8 overflow-hidden">
           <WorkflowStepper
             pipeline={projectStatus?.pipeline || []}
             currentStep={projectStatus?.current_step || "commercial"}
           />
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="hidden sm:flex items-center gap-3">
           <span className="text-xs text-muted-foreground">{user?.email}</span>
         </div>
       </header>
 
-      {/* Split View */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Chat Panel - 40% */}
+      {/* Desktop: Split View */}
+      <div className="hidden md:flex flex-1 overflow-hidden">
         <div className="w-[40%] min-w-[360px] border-r border-border">
           <ChatPanel
             messages={messages}
@@ -238,8 +257,6 @@ const ProjectPage = () => {
             isStreaming={isStreaming}
           />
         </div>
-
-        {/* Output Panel - 60% */}
         <div className="relative flex-1">
           <OutputPanel
             artifacts={artifacts}
@@ -247,7 +264,50 @@ const ProjectPage = () => {
             onSelectPiste={handleSelectPiste}
             onApprove={handleApprove}
             onReject={handleReject}
+            onBriefChange={handleBriefChange}
           />
+        </div>
+      </div>
+
+      {/* Mobile: Tabbed View */}
+      <div className="flex flex-col flex-1 overflow-hidden md:hidden">
+        <div className="flex border-b border-border bg-card">
+          <button
+            onClick={() => setMobileTab("chat")}
+            className={`flex-1 py-2.5 text-xs font-medium transition-colors ${
+              mobileTab === "chat" ? "text-primary border-b-2 border-primary" : "text-muted-foreground"
+            }`}
+          >
+            Conversation
+          </button>
+          <button
+            onClick={() => setMobileTab("output")}
+            className={`flex-1 py-2.5 text-xs font-medium transition-colors ${
+              mobileTab === "output" ? "text-primary border-b-2 border-primary" : "text-muted-foreground"
+            }`}
+          >
+            Livrables {artifacts.length > 0 && `(${artifacts.length})`}
+          </button>
+        </div>
+        <div className="flex-1 overflow-hidden">
+          {mobileTab === "chat" ? (
+            <ChatPanel
+              messages={messages}
+              thinking={thinking}
+              onSendMessage={handleSendMessage}
+              onQuickReply={handleQuickReply}
+              isStreaming={isStreaming}
+            />
+          ) : (
+            <OutputPanel
+              artifacts={artifacts}
+              briefData={briefData}
+              onSelectPiste={handleSelectPiste}
+              onApprove={handleApprove}
+              onReject={handleReject}
+              onBriefChange={handleBriefChange}
+            />
+          )}
         </div>
       </div>
     </div>

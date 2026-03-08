@@ -27,15 +27,19 @@ const Login = () => {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background">
+      {/* Animated gradient background */}
+      <div className="pointer-events-none absolute inset-0 animate-gradient-shift bg-gradient-to-br from-primary/5 via-background to-primary/10" />
+
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="w-full max-w-md px-6"
+        className="relative z-10 w-full max-w-md px-6"
       >
         <div className="mb-10 text-center">
-          <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary">
+          {/* Logo with glow */}
+          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary shadow-lg shadow-primary/30">
             <span className="text-2xl font-bold text-primary-foreground">M</span>
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-foreground">MaaS</h1>
@@ -79,14 +83,14 @@ const Login = () => {
           <button
             type="submit"
             disabled={loading}
-            className="flex h-11 w-full items-center justify-center rounded-lg bg-primary text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+            className="flex h-11 w-full items-center justify-center rounded-lg bg-primary text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 hover:shadow-lg hover:shadow-primary/20 disabled:opacity-50"
           >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Se connecter"}
           </button>
         </form>
 
-        <p className="mt-8 text-center text-xs text-muted-foreground">
-          #Dare #Make #Change — Propulsé par l'ADN Marcel
+        <p className="mt-8 text-center text-xs text-muted-foreground/70">
+          L'intelligence créative, orchestrée par Marcel
         </p>
       </motion.div>
     </div>
