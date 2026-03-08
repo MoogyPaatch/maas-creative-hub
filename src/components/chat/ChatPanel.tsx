@@ -1,6 +1,6 @@
 import { useRef, useEffect } from "react";
 import { AnimatePresence } from "framer-motion";
-import ChatMessageComponent from "./ChatMessage";
+import ChatMessageBubble from "./ChatMessage";
 import ChatInput from "./ChatInput";
 import ThinkingIndicator from "./ThinkingIndicator";
 import type { ChatMessage } from "@/types";
