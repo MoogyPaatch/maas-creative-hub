@@ -144,6 +144,14 @@ export interface ChatMessage {
   timestamp?: Date;
 }
 
+export interface ConversationSummary {
+  conversation_id: string;
+  created_at: string;
+  message_count: number;
+  last_message_preview?: string;
+  target_agent?: string;
+}
+
 export interface ConversationResponse {
   conversation_id: string;
   project_id: string;
@@ -163,6 +171,7 @@ export type WorkflowStep =
   | "prod_audio"
   | "delivered";
 
+// Full pipeline for agency view
 export const WORKFLOW_STEPS: { key: WorkflowStep; label: string; shortLabel: string }[] = [
   { key: "commercial", label: "Brief Client", shortLabel: "Brief" },
   { key: "planner", label: "Stratégie Créative", shortLabel: "Stratégie" },
@@ -172,5 +181,13 @@ export const WORKFLOW_STEPS: { key: WorkflowStep; label: string; shortLabel: str
   { key: "prod_image", label: "Production Image", shortLabel: "Image" },
   { key: "prod_video", label: "Production Vidéo", shortLabel: "Vidéo" },
   { key: "prod_audio", label: "Production Audio", shortLabel: "Audio" },
+  { key: "delivered", label: "Livraison", shortLabel: "Livré" },
+];
+
+// Simplified pipeline for client view (only validation milestones)
+export const CLIENT_WORKFLOW_STEPS: { key: WorkflowStep; label: string; shortLabel: string }[] = [
+  { key: "commercial", label: "Brief Client", shortLabel: "Brief" },
+  { key: "dc_visual", label: "Direction Créative", shortLabel: "Création" },
+  { key: "ppm", label: "Pré-Production", shortLabel: "PPM" },
   { key: "delivered", label: "Livraison", shortLabel: "Livré" },
 ];

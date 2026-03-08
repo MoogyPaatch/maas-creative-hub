@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -7,24 +7,33 @@ import {
   getConversation,
   getProject,
   getProjectStatus,
+  getProjectConversations,
   getBrief,
   sendMessageSSE,
   approveValidation,
   rejectValidation,
+  uploadFile,
 } from "@/lib/api";
 import { parseSSEStream } from "@/lib/sse";
 import ChatPanel from "@/components/chat/ChatPanel";
 import OutputPanel from "@/components/output/OutputPanel";
 import WorkflowStepper from "@/components/layout/WorkflowStepper";
-import type { ChatMessage, ProjectStatus, PipelineStep } from "@/types";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import ConversationHistory from "@/components/chat/ConversationHistory";
+import { AnimatePresence } from "framer-motion";
+import type { ChatMessage, ProjectStatus, PipelineStep, ConversationSummary } from "@/types";
+import { ArrowLeft, Loader2, History, Shield } from "lucide-react";
 
 const ProjectPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
 
+  const isAgency = user?.role === "agency" || user?.role === "admin";
+  const isClient = !isAgency;
+
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [artifacts, setArtifacts] = useState<ChatMessage[]>([]);
   const [thinking, setThinking] = useState<string | null>(null);
@@ -34,11 +43,31 @@ const ProjectPage = () => {
   const [loading, setLoading] = useState(true);
   const [mobileTab, setMobileTab] = useState<"chat" | "output">("chat");
 
+  // Pipeline polling ref
+  const pollRef = useRef<ReturnType<typeof setInterval>>();
+
+  // Load conversation history list
+  const loadConversationsList = useCallback(async () => {
+    if (!id) return;
+    try {
+      const convs = await getProjectConversations(id);
+      setConversations(
+        (convs || []).map((c: any) => ({
+          conversation_id: c.conversation_id || c.id,
+          created_at: c.created_at,
+          message_count: c.message_count || 0,
+          last_message_preview: c.last_message_preview || c.last_message,
+          target_agent: c.target_agent,
+        }))
+      );
+    } catch {
+      // Endpoint may not exist, ignore silently
+    }
+  }, [id]);
+
   // Initialize conversation
   useEffect(() => {
     if (!id || !user) return;
-
-    const isAgency = user?.role === "agency" || user?.role === "admin";
 
     const init = async () => {
       try {
@@ -48,16 +77,15 @@ const ProjectPage = () => {
         ]);
         if (status) setProjectStatus(status);
         getBrief(id).then(setBriefData).catch(() => {});
+        loadConversationsList();
 
         const currentStep = status?.current_step || project.supervisor_phase || "commercial";
         const targetAgent = isAgency ? (currentStep || "commercial") : null;
 
-        // Try to load existing conversation first
         let conv: any = null;
         if (project.latest_conversation_id) {
           conv = await getConversation(project.latest_conversation_id).catch(() => null);
         }
-        // Fallback: create new conversation with correct target_agent
         if (!conv) {
           conv = await createConversation(id, isAgency, targetAgent);
         }
@@ -81,7 +109,6 @@ const ProjectPage = () => {
         console.error("Init error:", err);
         toast.error("Erreur de chargement du projet");
         try {
-          const isAgency = user?.role === "agency" || user?.role === "admin";
           const conv = await createConversation(id, isAgency, "commercial");
           setConversationId(conv.conversation_id);
           const existingMessages: ChatMessage[] = (conv.messages || []).map((m: any) => ({
@@ -100,7 +127,25 @@ const ProjectPage = () => {
     };
 
     init();
-  }, [id, user]);
+  }, [id, user, isAgency, loadConversationsList]);
+
+  // Pipeline polling — refresh status every 10s
+  useEffect(() => {
+    if (!id) return;
+    pollRef.current = setInterval(() => {
+      getProjectStatus(id)
+        .then((s) => {
+          setProjectStatus((prev) => {
+            if (JSON.stringify(prev?.pipeline) !== JSON.stringify(s.pipeline)) {
+              return s;
+            }
+            return prev;
+          });
+        })
+        .catch(() => {});
+    }, 10_000);
+    return () => clearInterval(pollRef.current);
+  }, [id]);
 
   const handleSSEStream = useCallback(async (stream: ReadableStream<Uint8Array> | null) => {
     if (!stream) return;
@@ -112,16 +157,14 @@ const ProjectPage = () => {
       (msg) => {
         setThinking(null);
         setMessages((prev) => [...prev, msg]);
-        // Check for artifacts
         if (msg.metadata?.type) {
           setArtifacts((prev) => [...prev, msg]);
-          setMobileTab("output"); // Auto-switch on mobile
+          setMobileTab("output");
         }
       },
       () => {
         setThinking(null);
         setIsStreaming(false);
-        // Refresh project status and brief
         if (id) {
           getProjectStatus(id).then(setProjectStatus).catch(() => {});
           getBrief(id).then(setBriefData).catch(() => {});
@@ -196,11 +239,69 @@ const ProjectPage = () => {
     }
   }, [handleSSEStream]);
 
-  // File attach placeholder
-  const handleAttach = useCallback((files: FileList) => {
-    const names = Array.from(files).map(f => f.name).join(", ");
-    toast.info(`Fichier(s) reçu(s) : ${names} — l'upload sera disponible prochainement.`);
+  // Real file upload
+  const handleAttach = useCallback(async (files: FileList) => {
+    if (!conversationId) return;
+    const fileArray = Array.from(files);
+    
+    for (const file of fileArray) {
+      const sizeMB = file.size / (1024 * 1024);
+      if (sizeMB > 20) {
+        toast.error(`${file.name} dépasse 20 MB`);
+        continue;
+      }
+
+      try {
+        toast.info(`Upload de ${file.name}...`);
+        await uploadFile(conversationId, file);
+        setMessages((prev) => [
+          ...prev,
+          { role: "user", content: `📎 ${file.name}`, timestamp: new Date() },
+        ]);
+        toast.success(`${file.name} envoyé`);
+
+        // If it's a brief-like doc, trigger extraction
+        const ext = file.name.split(".").pop()?.toLowerCase();
+        if (ext === "pdf" || ext === "docx" || ext === "doc") {
+          const stream = await sendMessageSSE(conversationId, "text", "extract-brief", true);
+          await handleSSEStream(stream);
+        }
+      } catch (err) {
+        toast.error(`Échec de l'upload de ${file.name}`);
+      }
+    }
+  }, [conversationId, handleSSEStream]);
+
+  // Load a previous conversation
+  const handleSelectConversation = useCallback(async (convId: string) => {
+    try {
+      const conv = await getConversation(convId);
+      setConversationId(conv.conversation_id);
+      setMessages(
+        (conv.messages || []).map((m: any) => ({
+          role: m.role === "user" ? "user" : "agent",
+          content: m.content || "",
+          quickReplies: m.quick_replies?.map((qr: any) => ({ id: qr.id, label: qr.label })),
+          metadata: m.metadata,
+        }))
+      );
+      setArtifacts(
+        (conv.artifacts || []).map((a: any) => ({
+          role: "agent",
+          content: a.content || "",
+          metadata: a.metadata,
+        }))
+      );
+      setShowHistory(false);
+    } catch {
+      toast.error("Impossible de charger cette conversation");
+    }
   }, []);
+
+  // Check for pending validations
+  const hasPendingValidation = projectStatus?.pending_validations?.some(
+    (v) => v.status === "pending"
+  );
 
   if (loading) {
     return (
@@ -227,22 +328,60 @@ const ProjectPage = () => {
           <span className="hidden sm:inline text-sm font-semibold text-foreground">
             {projectStatus?.project_name || "Nouvelle campagne"}
           </span>
+          {/* Role badge */}
+          {isAgency && (
+            <span className="hidden lg:flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+              <Shield className="h-3 w-3" />
+              Agence
+            </span>
+          )}
+          {/* Pending validation indicator */}
+          {hasPendingValidation && (
+            <span className="flex items-center gap-1 rounded-full bg-warning/10 px-2.5 py-0.5 text-[10px] font-semibold text-warning animate-pulse">
+              Action requise
+            </span>
+          )}
         </div>
 
         <div className="flex-1 px-2 sm:px-8 overflow-hidden">
           <WorkflowStepper
             pipeline={projectStatus?.pipeline || []}
             currentStep={projectStatus?.current_step || "commercial"}
+            isClientView={isClient}
           />
         </div>
 
         <div className="hidden sm:flex items-center gap-3">
+          {/* Conversation history toggle (agency only) */}
+          {isAgency && conversations.length > 1 && (
+            <button
+              onClick={() => setShowHistory(!showHistory)}
+              className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
+                showHistory ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              }`}
+              title="Historique des conversations"
+            >
+              <History className="h-4 w-4" />
+            </button>
+          )}
           <span className="text-xs text-muted-foreground">{user?.email}</span>
         </div>
       </header>
 
       {/* Desktop: Split View */}
-      <div className="hidden md:flex flex-1 overflow-hidden">
+      <div className="hidden md:flex flex-1 overflow-hidden relative">
+        {/* Conversation history sidebar */}
+        <AnimatePresence>
+          {showHistory && (
+            <ConversationHistory
+              conversations={conversations}
+              activeId={conversationId}
+              onSelect={handleSelectConversation}
+              onClose={() => setShowHistory(false)}
+            />
+          )}
+        </AnimatePresence>
+
         <div className="w-[40%] min-w-[360px] border-r border-border">
           <ChatPanel
             messages={messages}
@@ -278,11 +417,14 @@ const ProjectPage = () => {
           </button>
           <button
             onClick={() => setMobileTab("output")}
-            className={`flex-1 py-2.5 text-xs font-medium transition-colors ${
+            className={`relative flex-1 py-2.5 text-xs font-medium transition-colors ${
               mobileTab === "output" ? "text-primary border-b-2 border-primary" : "text-muted-foreground"
             }`}
           >
             Livrables {artifacts.length > 0 && `(${artifacts.length})`}
+            {hasPendingValidation && mobileTab !== "output" && (
+              <span className="absolute top-2 right-4 h-2 w-2 rounded-full bg-warning animate-ping" />
+            )}
           </button>
         </div>
         <div className="flex-1 overflow-hidden">

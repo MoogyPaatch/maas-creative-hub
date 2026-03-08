@@ -99,6 +99,11 @@ export async function getConversation(conversationId: string) {
   return request<any>(`/conversations/${conversationId}`);
 }
 
+// Get all conversations for a project
+export async function getProjectConversations(projectId: string) {
+  return request<any[]>(`/projects/${projectId}/conversations`);
+}
+
 export async function sendMessageSSE(
   conversationId: string,
   type: "text" | "quick_reply",
@@ -124,6 +129,29 @@ export async function sendMessageSSE(
     throw new Error(`Message error ${res.status}`);
   }
   return res.body;
+}
+
+// Upload file to a conversation
+export async function uploadFile(conversationId: string, file: File): Promise<any> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await fetch(`${API_URL}/conversations/${conversationId}/upload`, {
+    method: "POST",
+    headers: { ...authHeaders() },
+    body: formData,
+  });
+
+  if (res.status === 401) {
+    localStorage.removeItem("maas_token");
+    window.location.href = "/login";
+    throw new Error("Session expirée");
+  }
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Upload error ${res.status}: ${text}`);
+  }
+  return res.json();
 }
 
 // Validations
@@ -188,6 +216,11 @@ export async function approvePPMGate(projectId: string, action: "approve" | "rev
 // Assets
 export async function getAssetAccessUrl(assetId: string) {
   return request<{ url: string }>(`/assets/${assetId}/access-url`);
+}
+
+// DAM / Export
+export async function getProjectExport(projectId: string) {
+  return request<{ zip_url: string; assets: any[] }>(`/projects/${projectId}/export`);
 }
 
 export { API_URL, getToken, authHeaders };
