@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import CreativeBrief from "./CreativeBrief";
 import DCPresentation from "./DCPresentation";
