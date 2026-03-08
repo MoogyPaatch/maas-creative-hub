@@ -1,41 +1,28 @@
-import { useState, useCallback, useEffect, useMemo, type ReactNode } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useMemo, type ReactNode } from "react";
 import {
-  ExternalLink,
-  Download,
   Film,
   Users,
   MapPin,
   Wrench,
   Image,
-  ChevronLeft,
-  ChevronRight,
-  Maximize2,
-  X,
   FileText,
 } from "lucide-react";
+import SlideShell, { type SlideItem } from "./SlideShell";
 import type { MessageMetadata } from "@/types";
-import type { LucideIcon } from "lucide-react";
 
 interface Props {
   metadata: MessageMetadata;
 }
 
-interface Slide {
-  icon: LucideIcon;
-  title: string;
-  content: ReactNode;
-}
-
 /* ─── Slide Builders ─── */
-
-function buildSlides(metadata: MessageMetadata): Slide[] {
-  const slides: Slide[] = [];
+function buildSlides(metadata: MessageMetadata): SlideItem[] {
+  const slides: SlideItem[] = [];
 
   // Title slide
   slides.push({
     icon: FileText,
     title: "Dossier PPM",
+    color: "hsl(239, 60%, 55%, 0.2)",
     content: (
       <div className="flex h-full flex-col items-center justify-center text-center p-12">
         <span className="mb-6 rounded-full bg-primary/10 px-5 py-2 text-xs font-bold uppercase tracking-widest text-primary">
@@ -74,7 +61,8 @@ function buildSlides(metadata: MessageMetadata): Slide[] {
       const isFirst = i === 0;
       slides.push({
         icon: Film,
-        title: isFirst ? "Storyboard" : `Storyboard (${i + 1}–${i + chunk.length})`,
+        title: isFirst ? "Storyboard" : `Story ${i + 1}–${i + chunk.length}`,
+        color: "hsl(340, 60%, 55%, 0.2)",
         content: (
           <div className="flex h-full flex-col p-8 lg:p-12">
             <div className="mb-6 flex items-center gap-2">
@@ -109,6 +97,7 @@ function buildSlides(metadata: MessageMetadata): Slide[] {
     slides.push({
       icon: Users,
       title: "Casting",
+      color: "hsl(160, 60%, 45%, 0.2)",
       content: (
         <div className="flex h-full flex-col p-8 lg:p-12">
           <div className="mb-6 flex items-center gap-2">
@@ -134,6 +123,7 @@ function buildSlides(metadata: MessageMetadata): Slide[] {
     slides.push({
       icon: MapPin,
       title: "Décors",
+      color: "hsl(30, 70%, 50%, 0.2)",
       content: (
         <div className="flex h-full flex-col p-8 lg:p-12">
           <div className="mb-6 flex items-center gap-2">
@@ -159,6 +149,7 @@ function buildSlides(metadata: MessageMetadata): Slide[] {
     slides.push({
       icon: Wrench,
       title: "Production",
+      color: "hsl(200, 60%, 50%, 0.2)",
       content: (
         <div className="flex h-full flex-col items-center justify-center p-8 lg:p-12">
           <div className="w-full max-w-xl space-y-8">
@@ -187,6 +178,7 @@ function buildSlides(metadata: MessageMetadata): Slide[] {
     slides.push({
       icon: Image,
       title: "Maquettes",
+      color: "hsl(280, 60%, 55%, 0.2)",
       content: (
         <div className="flex h-full flex-col p-8 lg:p-12">
           <div className="mb-6 flex items-center gap-2">
@@ -212,208 +204,18 @@ function buildSlides(metadata: MessageMetadata): Slide[] {
   return slides;
 }
 
-/* ─── Thumbnail Strip ─── */
-function Thumbnails({
-  slides,
-  current,
-  onSelect,
-}: {
-  slides: Slide[];
-  current: number;
-  onSelect: (i: number) => void;
-}) {
-  return (
-    <div className="flex gap-2 lg:flex-col">
-      {slides.map((s, i) => {
-        const Icon = s.icon;
-        return (
-          <button
-            key={i}
-            onClick={() => onSelect(i)}
-            className={`relative flex h-14 w-24 flex-shrink-0 flex-col items-center justify-center gap-1 overflow-hidden rounded-lg border-2 transition-all lg:h-16 lg:w-28 ${
-              i === current
-                ? "border-primary bg-primary/5 shadow-md"
-                : "border-border opacity-60 hover:opacity-100"
-            }`}
-          >
-            <Icon className="h-4 w-4 text-muted-foreground" />
-            <span className="text-[9px] font-medium text-muted-foreground leading-tight text-center px-1 truncate w-full">
-              {s.title}
-            </span>
-            <div className="absolute bottom-0.5 right-1 rounded bg-background/80 px-1 text-[9px] font-bold text-foreground">
-              {i + 1}
-            </div>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-/* ─── Nav Arrows ─── */
-function NavButtons({
-  onPrev,
-  onNext,
-  large,
-}: {
-  onPrev: () => void;
-  onNext: () => void;
-  large?: boolean;
-}) {
-  const size = large ? "h-12 w-12" : "h-9 w-9";
-  const iconSize = large ? "h-6 w-6" : "h-4 w-4";
-  return (
-    <>
-      <button
-        onClick={onPrev}
-        className={`absolute left-3 top-1/2 -translate-y-1/2 ${size} flex items-center justify-center rounded-full bg-background/80 text-foreground shadow-md backdrop-blur transition hover:bg-background`}
-      >
-        <ChevronLeft className={iconSize} />
-      </button>
-      <button
-        onClick={onNext}
-        className={`absolute right-3 top-1/2 -translate-y-1/2 ${size} flex items-center justify-center rounded-full bg-background/80 text-foreground shadow-md backdrop-blur transition hover:bg-background`}
-      >
-        <ChevronRight className={iconSize} />
-      </button>
-    </>
-  );
-}
-
 /* ─── Main Component ─── */
 const PPMPresentation = ({ metadata }: Props) => {
   const slides = useMemo(() => buildSlides(metadata), [metadata]);
-  const [current, setCurrent] = useState(0);
-  const [fullscreen, setFullscreen] = useState(false);
 
-  const prev = useCallback(
-    () => setCurrent((c) => (c > 0 ? c - 1 : slides.length - 1)),
-    [slides.length]
-  );
-  const next = useCallback(
-    () => setCurrent((c) => (c < slides.length - 1 ? c + 1 : 0)),
-    [slides.length]
-  );
-
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "ArrowLeft") prev();
-      if (e.key === "ArrowRight") next();
-      if (e.key === "Escape" && fullscreen) setFullscreen(false);
-    };
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [prev, next, fullscreen]);
-
-  if (!slides.length) return null;
-
-  const slideContent = (
-    <AnimatePresence mode="wait">
-      <motion.div
-        key={current}
-        initial={{ opacity: 0, x: 40 }}
-        animate={{ opacity: 1, x: 0 }}
-        exit={{ opacity: 0, x: -40 }}
-        transition={{ duration: 0.25 }}
-        className="h-full w-full"
-      >
-        {slides[current].content}
-      </motion.div>
-    </AnimatePresence>
-  );
-
-  /* ─── Fullscreen overlay ─── */
-  if (fullscreen) {
-    return (
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="fixed inset-0 z-50 flex flex-col bg-background"
-      >
-        <div className="flex h-12 items-center justify-between border-b border-border px-4">
-          <span className="text-sm font-semibold text-foreground">
-            Dossier PPM — {slides[current].title} ({current + 1}/{slides.length})
-          </span>
-          <button
-            onClick={() => setFullscreen(false)}
-            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
-          >
-            <X className="h-4 w-4" /> Fermer
-          </button>
-        </div>
-
-        <div className="relative flex-1 overflow-hidden">
-          {slideContent}
-          <NavButtons onPrev={prev} onNext={next} large />
-        </div>
-
-        <div className="flex items-center justify-center border-t border-border py-3">
-          <Thumbnails slides={slides} current={current} onSelect={setCurrent} />
-        </div>
-      </motion.div>
-    );
-  }
-
-  /* ─── Inline view ─── */
   return (
-    <div className="flex h-full flex-col overflow-hidden">
-      {/* Header bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-6 py-3">
-        <div className="flex items-center gap-2">
-          <FileText className="h-4 w-4 text-primary" />
-          <span className="text-sm font-bold text-foreground">Dossier PPM</span>
-          <span className="text-xs text-muted-foreground">
-            — {slides[current].title} · {current + 1}/{slides.length}
-          </span>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {metadata.slides_url && (
-            <a
-              href={metadata.slides_url}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-[11px] font-medium text-foreground transition hover:bg-muted"
-            >
-              <ExternalLink className="h-3 w-3" /> Google Slides
-            </a>
-          )}
-          {metadata.pptx_url && (
-            <a
-              href={metadata.pptx_url}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-[11px] font-medium text-foreground transition hover:bg-muted"
-            >
-              <Download className="h-3 w-3" /> PPTX
-            </a>
-          )}
-          <button
-            onClick={() => setFullscreen(true)}
-            className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-[11px] font-medium text-foreground transition hover:bg-muted"
-          >
-            <Maximize2 className="h-3 w-3" /> Plein écran
-          </button>
-        </div>
-      </div>
-
-      {/* Body: thumbnails + slide */}
-      <div className="flex flex-1 overflow-hidden">
-        <div className="hidden w-32 flex-shrink-0 flex-col items-center gap-2 overflow-y-auto border-r border-border py-4 lg:flex scrollbar-thin">
-          <Thumbnails slides={slides} current={current} onSelect={setCurrent} />
-        </div>
-
-        <div className="relative flex-1 overflow-hidden">
-          {slideContent}
-          <NavButtons onPrev={prev} onNext={next} />
-        </div>
-      </div>
-
-      {/* Mobile thumbnails */}
-      <div className="flex items-center gap-2 overflow-x-auto border-t border-border px-4 py-2 lg:hidden scrollbar-thin">
-        <Thumbnails slides={slides} current={current} onSelect={setCurrent} />
-      </div>
-    </div>
+    <SlideShell
+      slides={slides}
+      title="Dossier PPM"
+      titleIcon={FileText}
+      slidesUrl={metadata.slides_url}
+      pptxUrl={metadata.pptx_url}
+    />
   );
 };
 
