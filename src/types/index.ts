@@ -128,13 +128,8 @@ export type WorkflowStep =
   | "delivered";
 
 export const WORKFLOW_STEPS: { key: WorkflowStep; label: string }[] = [
-  { key: "commercial", label: "Brief" },
-  { key: "planner", label: "Stratégie" },
+  { key: "commercial", label: "Brief Client" },
   { key: "dc_visual", label: "Direction Créative" },
-  { key: "dc_copy", label: "Copywriting" },
   { key: "ppm", label: "Pré-Production" },
-  { key: "prod_image", label: "Production" },
-  { key: "prod_video", label: "Vidéo" },
-  { key: "prod_audio", label: "Audio" },
   { key: "delivered", label: "Livraison" },
 ];
