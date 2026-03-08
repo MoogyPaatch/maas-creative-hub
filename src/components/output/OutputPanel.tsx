@@ -11,13 +11,17 @@ import BrandAssetsPanel from "./BrandAssetsPanel";
 import DeliveryPanel from "./DeliveryPanel";
 import LiveBriefPreview from "./LiveBriefPreview";
 import ErrorBoundary from "@/components/ErrorBoundary";
-import type { ChatMessage, BrandAsset, BrandAssetCategory, ProductionAsset, BriefData } from "@/types";
+import type { ChatMessage, BrandAsset, BrandAssetCategory, ProductionAsset, BriefData, ClientBriefDraft } from "@/types";
 import { Sparkles, FolderOpen, PenTool, FileText, Palette, Film, Rocket, Package } from "lucide-react";
 
 interface Props {
   artifacts: ChatMessage[];
   briefData?: BriefData;
   messages?: ChatMessage[];
+  clientBriefDraft?: ClientBriefDraft;
+  changedBriefFields?: Set<string>;
+  onClientBriefFieldChange?: (key: keyof ClientBriefDraft, value: string) => void;
+  onValidateClientBrief?: () => void;
   onSelectPiste?: (pisteId: string) => void;
   onApprove?: (id: string, feedback: string | null) => void;
   onReject?: (id: string, feedback: string) => void;
@@ -28,6 +32,7 @@ interface Props {
   onBriefChange?: (content: string) => void;
   currentStep?: string;
   isClientView?: boolean;
+  isStreaming?: boolean;
 }
 
 function briefToMarkdown(brief: BriefData): string {
@@ -59,8 +64,13 @@ const emptyStateByStep: Record<string, { icon: React.ElementType; title: string;
   default: { icon: Rocket, title: "Espace créatif", desc: "Les livrables apparaîtront ici au fil de la conversation." },
 };
 
-const OutputPanel = ({ artifacts, briefData, messages = [], onSelectPiste, onApprove, onReject, brandAssets = [], onBrandAssetsChange, highlightAssetCategories, showAssetsTab = true, onBriefChange, currentStep, isClientView = false }: Props) => {
-  // Types hidden from client view (internal agency artifacts)
+const OutputPanel = ({
+  artifacts, briefData, messages = [],
+  clientBriefDraft, changedBriefFields, onClientBriefFieldChange, onValidateClientBrief,
+  onSelectPiste, onApprove, onReject,
+  brandAssets = [], onBrandAssetsChange, highlightAssetCategories,
+  showAssetsTab = true, onBriefChange, currentStep, isClientView = false, isStreaming = false,
+}: Props) => {
   const agencyOnlyTypes = new Set(["creative_brief", "dc_copy_result"]);
 
   const typedArtifacts = artifacts.filter((a) => a.metadata?.type);
@@ -82,31 +92,27 @@ const OutputPanel = ({ artifacts, briefData, messages = [], onSelectPiste, onApp
   const galleryAssets: ProductionAsset[] = galleryArtifact?.metadata?.production_assets || [];
   const hasCanvasTab = galleryAssets.length > 0;
 
-  // Show live brief (client brief) — always available when there are messages
-  const showLiveBrief = messages.length > 0;
+  // Show live brief when we have a draft or messages are flowing
+  const showLiveBrief = !!clientBriefDraft || messages.length > 0;
 
   const [activeTab, setActiveTab] = useState<"assets" | "canvas" | "live-brief" | number>(
     showLiveBrief ? "live-brief" : hasAssetsTab ? "assets" : 0
   );
 
-  // Auto-switch to live brief when messages come in during commercial phase
   useEffect(() => {
     if (showLiveBrief && activeTab !== "live-brief" && displayItems.length === 0) {
       setActiveTab("live-brief");
     }
   }, [showLiveBrief, messages.length]);
 
-  // Auto-switch to latest artifact when new ones arrive
   const prevDisplayCount = useRef(displayItems.length);
   useEffect(() => {
     if (displayItems.length > prevDisplayCount.current) {
-      // New artifact arrived — always switch to it
       setActiveTab(displayItems.length - 1);
     }
     prevDisplayCount.current = displayItems.length;
   }, [displayItems.length]);
 
-  // When brief data arrives, switch to it
   useEffect(() => {
     if (briefData && activeTab === "live-brief") {
       setActiveTab(0);
@@ -165,6 +171,11 @@ const OutputPanel = ({ artifacts, briefData, messages = [], onSelectPiste, onApp
   };
 
   const assetCount = brandAssets.length;
+  const defaultDraft: ClientBriefDraft = {
+    brand: null, product: null, objective: null, target: null, tone: null,
+    formats: null, promise: null, reason_to_believe: null,
+    creative_references: null, constraints: null, additional_context: null,
+  };
 
   return (
     <div className="flex h-full flex-col bg-background">
@@ -173,7 +184,13 @@ const OutputPanel = ({ artifacts, briefData, messages = [], onSelectPiste, onApp
           <AnimatePresence mode="wait">
             {activeTab === "live-brief" && showLiveBrief && (
               <motion.div key="live-brief" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="h-full">
-                <LiveBriefPreview messages={messages} />
+                <LiveBriefPreview
+                  briefDraft={clientBriefDraft || defaultDraft}
+                  changedFields={changedBriefFields}
+                  onFieldChange={onClientBriefFieldChange}
+                  onValidate={onValidateClientBrief}
+                  isStreaming={isStreaming}
+                />
               </motion.div>
             )}
             {activeTab === "assets" && onBrandAssetsChange && (

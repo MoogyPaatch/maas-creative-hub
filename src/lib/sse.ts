@@ -1,10 +1,11 @@
-import type { ChatMessage, QuickReply } from "@/types";
+import type { ChatMessage, QuickReply, ClientBriefDraft } from "@/types";
 
 export async function parseSSEStream(
   stream: ReadableStream<Uint8Array>,
   onMessage: (msg: ChatMessage) => void,
   onDone?: () => void,
-  onThinking?: (label: string) => void
+  onThinking?: (label: string) => void,
+  onBriefDraft?: (draft: Partial<ClientBriefDraft>) => void
 ): Promise<void> {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
@@ -25,9 +26,26 @@ export async function parseSSEStream(
           try {
             const data = JSON.parse(line.slice(6));
 
+            // Thinking indicator
             if (data.role === "thinking" && onThinking) {
               onThinking(data.content || "Traitement en cours...");
-            } else if (data.role !== "thinking") {
+              continue;
+            }
+
+            // Status update with phase_label → route to thinking indicator
+            if (data.metadata?.type === "status_update" && data.metadata?.status === "working" && data.metadata?.phase_label) {
+              onThinking?.(data.metadata.phase_label);
+              continue;
+            }
+
+            // Client brief draft → update brief panel in real-time
+            if (data.metadata?.type === "client_brief_draft" && data.metadata?.brief_draft) {
+              onBriefDraft?.(data.metadata.brief_draft);
+              // Also emit as a regular message if there's content
+              if (!data.content) continue;
+            }
+
+            if (data.role !== "thinking") {
               const role: ChatMessage["role"] =
                 data.role === "user" || data.role === "system" ? data.role : "agent";
 

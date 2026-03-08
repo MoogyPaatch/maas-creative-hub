@@ -226,4 +226,30 @@ export async function getProjectExport(projectId: string) {
   return request<{ zip_url: string; assets: any[] }>(`/projects/${projectId}/export`);
 }
 
+// Validate client brief
+export async function validateClientBrief(
+  conversationId: string,
+  briefData: Record<string, string>
+): Promise<ReadableStream<Uint8Array> | null> {
+  const res = await fetch(`${API_URL}/conversations/${conversationId}/brief-client/validate`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "text/event-stream",
+      ...authHeaders(),
+    },
+    body: JSON.stringify(briefData),
+  });
+  if (res.status === 401) {
+    localStorage.removeItem("maas_token");
+    window.location.href = "/login";
+    throw new Error("Session expirée");
+  }
+  if (!res.ok) {
+    toast.error(`Erreur de validation : ${res.status}`);
+    throw new Error(`Validation error ${res.status}`);
+  }
+  return res.body;
+}
+
 export { API_URL, getToken, authHeaders };

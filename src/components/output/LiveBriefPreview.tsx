@@ -1,140 +1,148 @@
-import { useMemo, useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { FileText, Loader2, Check, Pencil } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import type { ChatMessage, BriefData } from "@/types";
-
-interface BriefField {
-  key: keyof BriefData;
-  label: string;
-  type: "text" | "tags" | "textarea";
-  placeholder: string;
-}
-
-const BRIEF_FIELDS: BriefField[] = [
-  { key: "brand", label: "Marque", type: "text", placeholder: "Ex : Brooks, Nike, Sephora…" },
-  { key: "product", label: "Produit / Service", type: "text", placeholder: "Ex : Nouvelle chaussure de trail" },
-  { key: "objective", label: "Objectif", type: "textarea", placeholder: "Ex : Lancement produit, notoriété, conversion…" },
-  { key: "audience", label: "Audience cible", type: "text", placeholder: "Ex : Runners 25-45 ans, urbains" },
-  { key: "key_message", label: "Message clé", type: "textarea", placeholder: "Ex : La chaussure qui s'adapte à tous les terrains" },
-  { key: "tone", label: "Ton / Territoire", type: "tags", placeholder: "Ex : Inspirant, audacieux, expert" },
-  { key: "channels", label: "Canaux", type: "tags", placeholder: "Ex : Instagram, TV, Affichage" },
-  { key: "budget", label: "Budget", type: "text", placeholder: "Ex : 500K€, À définir" },
-  { key: "timing", label: "Timing", type: "text", placeholder: "Ex : Lancement mars 2026" },
-  { key: "kpis", label: "KPIs", type: "tags", placeholder: "Ex : Reach, Engagement, Ventes" },
-];
-
-/**
- * Extract structured brief fields from agent messages.
- * The agent reformulates user input — we parse the agent's understanding.
- */
-function extractBriefFromMessages(messages: ChatMessage[]): Partial<BriefData> {
-  const brief: Partial<BriefData> = {};
-  const agentMessages = messages
-    .filter((m) => m.role === "agent")
-    .map((m) => m.content)
-    .join("\n\n");
-
-  const patterns: Record<string, RegExp[]> = {
-    brand: [
-      /(?:marque|brand|client)\s*[:：]\s*(.+)/i,
-      /(?:pour|chez|de la marque)\s+([A-Z][a-zA-Zé]+)/,
-    ],
-    product: [
-      /(?:produit|product|offre|service)\s*[:：]\s*(.+)/i,
-      /(?:lancement|lancer|nouveau(?:x|lle)?)\s+(.+?)(?:\.|,|$)/i,
-    ],
-    objective: [
-      /(?:objectif|objective|but|goal)\s*[:：]\s*(.+)/i,
-      /(?:l'objectif est|on vise|pour)\s+(.+?)(?:\.|$)/i,
-    ],
-    audience: [
-      /(?:audience|cible|target|public)\s*[:：]\s*(.+)/i,
-      /(?:cibl(?:e|er|ant)|destiné[es]? (?:à|aux))\s+(.+?)(?:\.|,|$)/i,
-    ],
-    key_message: [
-      /(?:message\s*cl[ée]|key.?message|insight)\s*[:：]\s*(.+)/i,
-    ],
-    tone: [
-      /(?:ton|tone|tonalité|territoire)\s*[:：]\s*(.+)/i,
-    ],
-    channels: [
-      /(?:canaux|channels?|médias?|supports?)\s*[:：]\s*(.+)/i,
-    ],
-    budget: [
-      /(?:budget)\s*[:：]\s*(.+)/i,
-    ],
-    timing: [
-      /(?:timing|calendrier|deadline|échéance|date)\s*[:：]\s*(.+)/i,
-    ],
-    kpis: [
-      /(?:kpis?|indicateurs?)\s*[:：]\s*(.+)/i,
-    ],
-  };
-
-  for (const [field, regexes] of Object.entries(patterns)) {
-    for (const re of regexes) {
-      const match = agentMessages.match(re);
-      if (match?.[1]) {
-        const value = match[1].trim();
-        if (["tone", "channels", "kpis"].includes(field)) {
-          (brief as any)[field] = value.split(/[,;\/]/).map((s: string) => s.trim()).filter(Boolean);
-        } else {
-          (brief as any)[field] = value;
-        }
-        break;
-      }
-    }
-  }
-
-  return brief;
-}
+import { FileText, Loader2, Check, Pencil, ChevronDown, Send } from "lucide-react";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
+import type { ClientBriefDraft } from "@/types";
+import {
+  CLIENT_BRIEF_FIELD_DEFS,
+  CLIENT_BRIEF_REQUIRED_FIELDS,
+  CLIENT_BRIEF_ENRICHMENT_FIELDS,
+} from "@/types";
 
 interface Props {
-  messages: ChatMessage[];
-  onBriefChange?: (brief: Partial<BriefData>) => void;
+  briefDraft: ClientBriefDraft;
+  changedFields?: Set<string>;
+  onFieldChange?: (key: keyof ClientBriefDraft, value: string) => void;
+  onValidate?: () => void;
+  isStreaming?: boolean;
 }
 
-const LiveBriefPreview = ({ messages, onBriefChange }: Props) => {
-  const extracted = useMemo(() => extractBriefFromMessages(messages), [messages]);
-  const [overrides, setOverrides] = useState<Partial<BriefData>>({});
+const EMPTY_DRAFT: ClientBriefDraft = {
+  brand: null, product: null, objective: null, target: null, tone: null,
+  formats: null, promise: null, reason_to_believe: null,
+  creative_references: null, constraints: null, additional_context: null,
+};
+
+const LiveBriefPreview = ({
+  briefDraft,
+  changedFields,
+  onFieldChange,
+  onValidate,
+  isStreaming = false,
+}: Props) => {
   const [editingField, setEditingField] = useState<string | null>(null);
 
-  // Merge: overrides take priority over AI-extracted
-  const merged = useMemo(() => {
-    const result: Partial<BriefData> = { ...extracted };
-    for (const [k, v] of Object.entries(overrides)) {
-      if (v !== undefined && v !== "" && (!Array.isArray(v) || v.length > 0)) {
-        (result as any)[k] = v;
-      }
-    }
-    return result;
-  }, [extracted, overrides]);
+  const draft = briefDraft || EMPTY_DRAFT;
 
-  useEffect(() => {
-    onBriefChange?.(merged);
-  }, [merged, onBriefChange]);
+  const requiredFields = CLIENT_BRIEF_FIELD_DEFS.filter((f) => f.tier === "required");
+  const quasiFields = CLIENT_BRIEF_FIELD_DEFS.filter((f) => f.tier === "quasi");
+  const enrichmentFields = CLIENT_BRIEF_FIELD_DEFS.filter((f) => f.tier === "enrichment");
 
-  const filledCount = BRIEF_FIELDS.filter((f) => {
-    const val = merged[f.key];
-    return val && (Array.isArray(val) ? val.length > 0 : String(val).length > 0);
+  const allMainFields = [...requiredFields, ...quasiFields];
+
+  const filledCount = CLIENT_BRIEF_FIELD_DEFS.filter((f) => {
+    const val = draft[f.key];
+    return val && val.trim().length > 0;
   }).length;
+  const totalFields = CLIENT_BRIEF_FIELD_DEFS.length;
+  const progress = Math.round((filledCount / totalFields) * 100);
 
-  const progress = Math.round((filledCount / BRIEF_FIELDS.length) * 100);
+  const canValidate = CLIENT_BRIEF_REQUIRED_FIELDS.every((k) => {
+    const val = draft[k];
+    return val && val.trim().length > 0;
+  });
 
-  const handleFieldChange = useCallback((key: string, value: string) => {
-    const field = BRIEF_FIELDS.find((f) => f.key === key);
-    if (field?.type === "tags") {
-      setOverrides((prev) => ({ ...prev, [key]: value.split(",").map((s) => s.trim()).filter(Boolean) }));
-    } else {
-      setOverrides((prev) => ({ ...prev, [key]: value }));
-    }
-  }, []);
+  // Check if enrichment section has any values
+  const hasEnrichmentValues = CLIENT_BRIEF_ENRICHMENT_FIELDS.some((k) => {
+    const val = draft[k];
+    return val && val.trim().length > 0;
+  });
 
-  const agentMessages = messages.filter((m) => m.role === "agent");
-  const userMessages = messages.filter((m) => m.role === "user");
-  const isCollecting = userMessages.length > 0;
-  const hasAgentResponse = agentMessages.length > 0;
+  const [enrichmentOpen, setEnrichmentOpen] = useState(hasEnrichmentValues);
+
+  const renderField = useCallback(
+    (field: (typeof CLIENT_BRIEF_FIELD_DEFS)[0], index: number) => {
+      const val = draft[field.key] || "";
+      const isFilled = val.trim().length > 0;
+      const isEditing = editingField === field.key;
+      const justChanged = changedFields?.has(field.key);
+
+      return (
+        <motion.div
+          key={field.key}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: index * 0.02 }}
+          className="group"
+        >
+          <div
+            className={`relative flex items-start gap-3 px-4 py-3 border-b border-border/50 transition-colors
+              ${isEditing ? "bg-muted/50" : "hover:bg-muted/30"}
+              ${justChanged ? "animate-brief-field-flash" : ""}`}
+          >
+            {/* Status dot */}
+            <div className="mt-1.5 shrink-0">
+              {isFilled ? (
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  className="flex h-4 w-4 items-center justify-center bg-foreground"
+                >
+                  <Check className="h-2.5 w-2.5 text-background" />
+                </motion.div>
+              ) : (
+                <div className="h-4 w-4 border border-border" />
+              )}
+            </div>
+
+            {/* Label + Value */}
+            <div className="flex-1 min-w-0">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                {field.label}
+                {field.tier === "required" && (
+                  <span className="ml-1 text-destructive">*</span>
+                )}
+              </label>
+
+              {isEditing ? (
+                <div className="mt-1">
+                  <textarea
+                    autoFocus
+                    className="w-full bg-transparent border-none text-sm text-foreground resize-none outline-none placeholder:text-muted-foreground/50 min-h-[40px]"
+                    value={val}
+                    placeholder={field.placeholder}
+                    rows={field.key === "additional_context" ? 3 : 1}
+                    onChange={(e) => onFieldChange?.(field.key, e.target.value)}
+                    onBlur={() => setEditingField(null)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") setEditingField(null);
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        setEditingField(null);
+                      }
+                    }}
+                  />
+                </div>
+              ) : (
+                <div
+                  className="mt-0.5 cursor-text flex items-center gap-2"
+                  onClick={() => setEditingField(field.key)}
+                >
+                  {isFilled ? (
+                    <p className="text-sm text-foreground leading-relaxed">{val}</p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground/40 italic">{field.placeholder}</p>
+                  )}
+                  <Pencil className="h-3 w-3 text-muted-foreground/0 group-hover:text-muted-foreground/50 transition-colors shrink-0" />
+                </div>
+              )}
+            </div>
+          </div>
+        </motion.div>
+      );
+    },
+    [draft, editingField, changedFields, onFieldChange]
+  );
 
   return (
     <motion.div
@@ -152,7 +160,7 @@ const LiveBriefPreview = ({ messages, onBriefChange }: Props) => {
             <div>
               <h2 className="text-base font-bold text-foreground">Brief Client</h2>
               <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
-                {isCollecting ? "Rempli par Marcel AI en temps réel" : "En attente de vos informations"}
+                Rempli par Marcel AI en temps réel
               </p>
             </div>
           </div>
@@ -168,134 +176,61 @@ const LiveBriefPreview = ({ messages, onBriefChange }: Props) => {
               />
             </div>
             <span className="text-[10px] font-bold text-muted-foreground tabular-nums">
-              {filledCount}/{BRIEF_FIELDS.length}
+              {filledCount}/{totalFields}
             </span>
           </div>
         </div>
 
-        {/* Brief fields */}
-        <div className="space-y-1">
-          {BRIEF_FIELDS.map((field, i) => {
-            const val = merged[field.key];
-            const displayValue = Array.isArray(val) ? val.join(", ") : String(val || "");
-            const isFilled = displayValue.length > 0;
-            const isEditing = editingField === field.key;
-
-            return (
-              <motion.div
-                key={field.key}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.03 }}
-                className="group"
-              >
-                <div
-                  className={`flex items-start gap-3 px-4 py-3 border-b border-border/50 transition-colors
-                    ${isEditing ? "bg-muted/50" : "hover:bg-muted/30"}`}
-                >
-                  {/* Status dot */}
-                  <div className="mt-1.5 shrink-0">
-                    {isFilled ? (
-                      <motion.div
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        className="flex h-4 w-4 items-center justify-center bg-foreground"
-                      >
-                        <Check className="h-2.5 w-2.5 text-background" />
-                      </motion.div>
-                    ) : (
-                      <div className="h-4 w-4 border border-border" />
-                    )}
-                  </div>
-
-                  {/* Label + Value */}
-                  <div className="flex-1 min-w-0">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                      {field.label}
-                    </label>
-
-                    {isEditing ? (
-                      <div className="mt-1">
-                        {field.type === "textarea" ? (
-                          <textarea
-                            autoFocus
-                            className="w-full bg-transparent border-none text-sm text-foreground resize-none outline-none placeholder:text-muted-foreground/50 min-h-[60px]"
-                            value={displayValue}
-                            placeholder={field.placeholder}
-                            onChange={(e) => handleFieldChange(String(field.key), e.target.value)}
-                            onBlur={() => setEditingField(null)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Escape") setEditingField(null);
-                            }}
-                          />
-                        ) : (
-                          <input
-                            autoFocus
-                            className="w-full bg-transparent border-none text-sm text-foreground outline-none placeholder:text-muted-foreground/50"
-                            value={displayValue}
-                            placeholder={field.placeholder}
-                            onChange={(e) => handleFieldChange(String(field.key), e.target.value)}
-                            onBlur={() => setEditingField(null)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" || e.key === "Escape") setEditingField(null);
-                            }}
-                          />
-                        )}
-                        {field.type === "tags" && (
-                          <p className="text-[9px] text-muted-foreground mt-0.5">Séparez par des virgules</p>
-                        )}
-                      </div>
-                    ) : (
-                      <div
-                        className="mt-0.5 cursor-text flex items-center gap-2"
-                        onClick={() => setEditingField(String(field.key))}
-                      >
-                        {isFilled ? (
-                          field.type === "tags" && Array.isArray(val) ? (
-                            <div className="flex flex-wrap gap-1.5">
-                              {val.map((tag, ti) => (
-                                <span
-                                  key={ti}
-                                  className="border border-border px-2 py-0.5 text-xs font-medium text-foreground"
-                                >
-                                  {tag}
-                                </span>
-                              ))}
-                            </div>
-                          ) : (
-                            <p className="text-sm text-foreground leading-relaxed">{displayValue}</p>
-                          )
-                        ) : (
-                          <p className="text-sm text-muted-foreground/40 italic">{field.placeholder}</p>
-                        )}
-                        <Pencil className="h-3 w-3 text-muted-foreground/0 group-hover:text-muted-foreground/50 transition-colors shrink-0" />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </motion.div>
-            );
-          })}
+        {/* Required + Quasi fields */}
+        <div className="space-y-0">
+          {allMainFields.map((field, i) => renderField(field, i))}
         </div>
 
-        {/* Hint */}
-        {!isCollecting && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.5 }}
-            className="mt-8 text-center"
-          >
-            <p className="text-xs text-muted-foreground">
-              Décrivez votre projet dans le chat — Marcel remplira ce brief automatiquement.
-              <br />
-              <span className="text-muted-foreground/60">Vous pouvez aussi cliquer sur chaque champ pour le remplir manuellement.</span>
-            </p>
-          </motion.div>
+        {/* Enrichment — collapsible */}
+        <Collapsible open={enrichmentOpen} onOpenChange={setEnrichmentOpen} className="mt-4">
+          <CollapsibleTrigger className="flex w-full items-center gap-2 px-4 py-3 text-xs font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors">
+            <ChevronDown
+              className={`h-3.5 w-3.5 transition-transform duration-200 ${enrichmentOpen ? "rotate-0" : "-rotate-90"}`}
+            />
+            Détails supplémentaires
+            {hasEnrichmentValues && (
+              <span className="ml-auto text-[10px] font-medium text-foreground/60">
+                {CLIENT_BRIEF_ENRICHMENT_FIELDS.filter((k) => draft[k]?.trim()).length}/{CLIENT_BRIEF_ENRICHMENT_FIELDS.length}
+              </span>
+            )}
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <div className="space-y-0">
+              {enrichmentFields.map((field, i) => renderField(field, allMainFields.length + i))}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+
+        {/* Validate button */}
+        {onValidate && (
+          <div className="mt-8 flex justify-center">
+            <button
+              onClick={onValidate}
+              disabled={!canValidate || isStreaming}
+              className={`flex items-center gap-2 px-8 py-3 text-sm font-bold uppercase tracking-wider transition-all ${
+                canValidate && !isStreaming
+                  ? "bg-foreground text-background hover:opacity-90"
+                  : "bg-muted text-muted-foreground cursor-not-allowed"
+              }`}
+            >
+              <Send className="h-4 w-4" />
+              Valider le Brief
+            </button>
+            {!canValidate && (
+              <p className="mt-2 text-[10px] text-muted-foreground text-center absolute -bottom-6">
+                Les 5 champs obligatoires (*) doivent être remplis
+              </p>
+            )}
+          </div>
         )}
 
-        {/* Collecting indicator */}
-        {isCollecting && hasAgentResponse && filledCount < BRIEF_FIELDS.length && (
+        {/* Streaming indicator */}
+        {isStreaming && filledCount < totalFields && (
           <div className="mt-6 flex items-center gap-2 justify-center">
             <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
             <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
