@@ -61,17 +61,23 @@ const OutputPanel = ({ artifacts, briefData, onSelectPiste, onApprove, onReject,
 
   // "brand_assets" is a permanent virtual tab, always first when enabled
   const hasAssetsTab = showAssetsTab && onBrandAssetsChange;
+  
+  // Check if campaign_gallery exists to show canvas tab
+  const galleryArtifact = displayItems.find(d => d.type === "campaign_gallery");
+  const galleryAssets: ProductionAsset[] = galleryArtifact?.metadata?.production_assets || [];
+  const hasCanvasTab = galleryAssets.length > 0;
 
-  const [activeTab, setActiveTab] = useState<"assets" | number>(hasAssetsTab ? "assets" : 0);
+  const [activeTab, setActiveTab] = useState<"assets" | "canvas" | number>(hasAssetsTab ? "assets" : 0);
+  const [canvasActive, setCanvasActive] = useState(false);
 
   useEffect(() => {
-    if (displayItems.length > 0 && activeTab !== "assets") {
+    if (displayItems.length > 0 && activeTab !== "assets" && activeTab !== "canvas") {
       setActiveTab(displayItems.length - 1);
     }
   }, [displayItems.length]);
 
-  // Auto-switch to latest artifact when new ones arrive, but keep assets if user chose it
-  const activeIndex = activeTab === "assets" ? -1 : (activeTab as number);
+  // Auto-switch to latest artifact when new ones arrive, but keep assets/canvas if user chose it
+  const activeIndex = activeTab === "assets" || activeTab === "canvas" ? -1 : (activeTab as number);
   const active = activeIndex >= 0 ? displayItems[activeIndex] || null : null;
 
   const showEmpty = !hasAssetsTab && !active;
