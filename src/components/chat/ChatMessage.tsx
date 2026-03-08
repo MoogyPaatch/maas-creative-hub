@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import type { ChatMessage } from "@/types";
+import type { ChatMessage as ChatMessageType } from "@/types";
 import ReactMarkdown from "react-markdown";
 
 interface Props {
