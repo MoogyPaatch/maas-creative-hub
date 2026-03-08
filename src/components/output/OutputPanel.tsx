@@ -216,6 +216,20 @@ const OutputPanel = ({ artifacts, briefData, onSelectPiste, onApprove, onReject,
                 {labels[item.type] || item.type}
               </button>
             ))}
+            {/* Canvas tab — visible when gallery exists */}
+            {hasCanvasTab && (
+              <button
+                onClick={() => setActiveTab("canvas")}
+                className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition-all ${
+                  activeTab === "canvas"
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                }`}
+              >
+                <PenTool className="h-3 w-3" />
+                Canevas
+              </button>
+            )}
           </div>
         </div>
       )}
