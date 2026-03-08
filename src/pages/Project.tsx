@@ -401,6 +401,7 @@ const ProjectPage = () => {
             onApprove={handleApprove}
             onReject={handleReject}
             currentStep={projectStatus?.current_step || "commercial"}
+            isClientView={isClient}
           />
         </div>
       </div>
@@ -447,6 +448,7 @@ const ProjectPage = () => {
               onApprove={handleApprove}
               onReject={handleReject}
               currentStep={projectStatus?.current_step || "commercial"}
+              isClientView={isClient}
             />
           )}
         </div>
