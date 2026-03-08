@@ -6,9 +6,10 @@ import DCCopyResult from "./DCCopyResult";
 import PPMPresentation from "./PPMPresentation";
 import CampaignGallery from "./CampaignGallery";
 import ValidationPanel from "./ValidationPanel";
-import type { ChatMessage } from "@/types";
+import BrandAssetsPanel from "./BrandAssetsPanel";
+import type { ChatMessage, BrandAsset, BrandAssetCategory } from "@/types";
 import { motion } from "framer-motion";
-import { Sparkles } from "lucide-react";
+import { Sparkles, FolderOpen } from "lucide-react";
 
 interface Props {
   artifacts: ChatMessage[];
@@ -16,6 +17,10 @@ interface Props {
   onSelectPiste?: (pisteId: string) => void;
   onApprove?: (id: string, feedback: string | null) => void;
   onReject?: (id: string, feedback: string) => void;
+  brandAssets?: BrandAsset[];
+  onBrandAssetsChange?: (assets: BrandAsset[]) => void;
+  highlightAssetCategories?: BrandAssetCategory[];
+  showAssetsTab?: boolean;
 }
 
 function briefToMarkdown(brief: any): string {
@@ -30,7 +35,6 @@ function briefToMarkdown(brief: any): string {
   if (brief.key_message) lines.push(`## Message clé\n> ${brief.key_message}`);
   if (brief.kpis?.length) lines.push(`## KPIs\n${brief.kpis.map((k: string) => `- ${k}`).join("\n")}`);
   if (brief.timing) lines.push(`## Timing\n${brief.timing}`);
-  // Fallback: render any other keys
   const known = ["brand", "product", "objective", "budget", "channels", "tone", "key_message", "kpis", "timing"];
   Object.entries(brief).forEach(([key, val]) => {
     if (!known.includes(key) && val) {
@@ -40,10 +44,9 @@ function briefToMarkdown(brief: any): string {
   return lines.join("\n\n");
 }
 
-const OutputPanel = ({ artifacts, briefData, onSelectPiste, onApprove, onReject }: Props) => {
+const OutputPanel = ({ artifacts, briefData, onSelectPiste, onApprove, onReject, brandAssets = [], onBrandAssetsChange, highlightAssetCategories, showAssetsTab = true }: Props) => {
   const typedArtifacts = artifacts.filter((a) => a.metadata?.type);
   
-  // Build display items: briefData + typed artifacts from SSE
   const displayItems: { type: string; content?: string; metadata?: any }[] = [];
   
   if (briefData) {
@@ -51,22 +54,28 @@ const OutputPanel = ({ artifacts, briefData, onSelectPiste, onApprove, onReject 
   }
   
   typedArtifacts.forEach((a) => {
-    // Skip SSE brief artifacts if we have briefData from API
     if (a.metadata?.type === "creative_brief" && briefData) return;
     displayItems.push({ type: a.metadata!.type, content: a.metadata?.content, metadata: a.metadata });
   });
 
-  const [activeIndex, setActiveIndex] = useState(0);
+  // "brand_assets" is a permanent virtual tab, always first when enabled
+  const hasAssetsTab = showAssetsTab && onBrandAssetsChange;
+
+  const [activeTab, setActiveTab] = useState<"assets" | number>(hasAssetsTab ? "assets" : 0);
 
   useEffect(() => {
-    if (displayItems.length > 0) {
-      setActiveIndex(displayItems.length - 1);
+    if (displayItems.length > 0 && activeTab !== "assets") {
+      setActiveTab(displayItems.length - 1);
     }
   }, [displayItems.length]);
 
-  const active = displayItems[activeIndex] || null;
+  // Auto-switch to latest artifact when new ones arrive, but keep assets if user chose it
+  const activeIndex = activeTab === "assets" ? -1 : (activeTab as number);
+  const active = activeIndex >= 0 ? displayItems[activeIndex] || null : null;
 
-  if (!active) {
+  const showEmpty = !hasAssetsTab && !active;
+
+  if (showEmpty) {
     return (
       <div className="flex h-full flex-col items-center justify-center bg-background p-8">
         <motion.div
@@ -95,29 +104,45 @@ const OutputPanel = ({ artifacts, briefData, onSelectPiste, onApprove, onReject 
     validation_required: "Validation",
   };
 
+  const assetCount = brandAssets.length;
+
   return (
     <div className="flex h-full flex-col bg-background">
       <div className="flex-1 overflow-hidden">
         <AnimatePresence mode="wait">
-          {active.type === "creative_brief" && active.content && (
+          {activeTab === "assets" && onBrandAssetsChange && (
+            <motion.div
+              key="brand-assets"
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 10 }}
+              className="h-full"
+            >
+              <BrandAssetsPanel
+                assets={brandAssets}
+                onAssetsChange={onBrandAssetsChange}
+                highlightCategories={highlightAssetCategories}
+              />
+            </motion.div>
+          )}
+          {active?.type === "creative_brief" && active.content && (
             <CreativeBrief key={`brief-${activeIndex}`} content={active.content} onContentChange={(newContent) => {
-              // Update brief content in place
               active.content = newContent;
             }} />
           )}
-          {active.type === "dc_presentation" && active.metadata && (
+          {active?.type === "dc_presentation" && active.metadata && (
             <DCPresentation key={`dc-${activeIndex}`} metadata={active.metadata} onSelectPiste={onSelectPiste} />
           )}
-          {active.type === "dc_copy_result" && active.metadata && (
+          {active?.type === "dc_copy_result" && active.metadata && (
             <DCCopyResult key={`copy-${activeIndex}`} metadata={active.metadata} />
           )}
-          {active.type === "ppm_presentation" && active.metadata && (
+          {active?.type === "ppm_presentation" && active.metadata && (
             <PPMPresentation key={`ppm-${activeIndex}`} metadata={active.metadata} />
           )}
-          {active.type === "campaign_gallery" && active.metadata && (
+          {active?.type === "campaign_gallery" && active.metadata && (
             <CampaignGallery key={`gallery-${activeIndex}`} metadata={active.metadata} />
           )}
-          {active.type === "validation_required" && active.metadata && onApprove && onReject && (
+          {active?.type === "validation_required" && active.metadata && onApprove && onReject && (
             <div key={`validation-${activeIndex}`} className="flex h-full items-center justify-center p-8">
               <ValidationPanel
                 gate={active.metadata.gate || ""}
@@ -131,15 +156,35 @@ const OutputPanel = ({ artifacts, briefData, onSelectPiste, onApprove, onReject 
         </AnimatePresence>
       </div>
 
-      {displayItems.length > 1 && (
+      {/* Bottom tab bar — always visible when there's content */}
+      {(hasAssetsTab || displayItems.length > 1) && (
         <div className="flex justify-center border-t border-border bg-card/50 px-4 py-3 backdrop-blur-sm">
           <div className="flex gap-1.5 rounded-full border border-border bg-card px-2 py-1">
+            {/* Permanent assets tab */}
+            {hasAssetsTab && (
+              <button
+                onClick={() => setActiveTab("assets")}
+                className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition-all ${
+                  activeTab === "assets"
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                }`}
+              >
+                <FolderOpen className="h-3 w-3" />
+                Assets
+                {assetCount > 0 && (
+                  <span className="ml-0.5 rounded-full bg-primary-foreground/20 px-1.5 text-[10px]">
+                    {assetCount}
+                  </span>
+                )}
+              </button>
+            )}
             {displayItems.map((item, i) => (
               <button
                 key={i}
-                onClick={() => setActiveIndex(i)}
+                onClick={() => setActiveTab(i)}
                 className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-all ${
-                  i === activeIndex
+                  activeTab === i
                     ? "bg-primary text-primary-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground hover:bg-muted"
                 }`}
