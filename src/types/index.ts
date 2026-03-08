@@ -72,6 +72,21 @@ export interface MessageMetadata {
   // Validation
   gate?: string;
   validation_id?: string;
+  // Campaign Gallery
+  production_assets?: ProductionAsset[];
+  campaign_title?: string;
+  zip_url?: string;
+}
+
+export interface ProductionAsset {
+  id: string;
+  type: "image" | "video" | "audio" | "document";
+  title: string;
+  format: string;
+  url: string;
+  thumbnail_url?: string;
+  duration?: string;
+  file_size?: string;
 }
 
 export interface DCPiste {

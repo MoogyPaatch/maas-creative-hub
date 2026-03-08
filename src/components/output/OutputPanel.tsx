@@ -4,6 +4,7 @@ import CreativeBrief from "./CreativeBrief";
 import DCPresentation from "./DCPresentation";
 import DCCopyResult from "./DCCopyResult";
 import PPMPresentation from "./PPMPresentation";
+import CampaignGallery from "./CampaignGallery";
 import ValidationPanel from "./ValidationPanel";
 import type { ChatMessage } from "@/types";
 import { motion } from "framer-motion";
@@ -90,6 +91,7 @@ const OutputPanel = ({ artifacts, briefData, onSelectPiste, onApprove, onReject 
     dc_presentation: "Pistes DC",
     dc_copy_result: "Copy",
     ppm_presentation: "PPM",
+    campaign_gallery: "Campagne",
     validation_required: "Validation",
   };
 
@@ -108,6 +110,9 @@ const OutputPanel = ({ artifacts, briefData, onSelectPiste, onApprove, onReject 
           )}
           {active.type === "ppm_presentation" && active.metadata && (
             <PPMPresentation key={`ppm-${activeIndex}`} metadata={active.metadata} />
+          )}
+          {active.type === "campaign_gallery" && active.metadata && (
+            <CampaignGallery key={`gallery-${activeIndex}`} metadata={active.metadata} />
           )}
           {active.type === "validation_required" && active.metadata && onApprove && onReject && (
             <div key={`validation-${activeIndex}`} className="flex h-full items-center justify-center p-8">
