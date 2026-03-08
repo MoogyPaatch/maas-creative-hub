@@ -74,6 +74,20 @@ const ProjectPage = () => {
         ]);
         if (status) setProjectStatus(status);
         getBrief(id).then(setBriefData).catch(() => {});
+        // Fetch PPM data if available and inject as artifact
+        getPPM(id).then((ppmData) => {
+          if (ppmData) {
+            setArtifacts((prev) => {
+              // Don't duplicate if already present
+              if (prev.some((a) => a.metadata?.type === "ppm_presentation")) return prev;
+              return [...prev, {
+                role: "agent",
+                content: "",
+                metadata: { type: "ppm_presentation", ...ppmData },
+              }];
+            });
+          }
+        }).catch(() => {});
         loadConversationsList();
 
         const currentStep = status?.current_step || project.supervisor_phase || "commercial";
