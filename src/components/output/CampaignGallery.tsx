@@ -168,7 +168,7 @@ function AudioPlayer({ asset }: { asset: ProductionAsset }) {
 }
 
 /* ─── Main Gallery ─── */
-const CampaignGallery = ({ metadata }: Props) => {
+const CampaignGallery = ({ metadata, onOpenCanvas }: Props) => {
   const assets = metadata.production_assets || [];
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
