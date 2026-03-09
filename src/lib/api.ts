@@ -265,6 +265,23 @@ export async function getBrandAssets(projectId: string) {
   return (assets || []).map(mapBrandAsset);
 }
 
+// Dossier PDF export
+export async function downloadDossierPDF(projectId: string): Promise<Blob> {
+  const res = await fetch(`${API_URL}/projects/${projectId}/dossier/pdf`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error("Failed to download dossier");
+  return res.blob();
+}
+
+// Share link
+export async function createShareLink(projectId: string) {
+  return request<{ token: string; share_url: string; expires_at: string }>(
+    `/projects/${projectId}/share`,
+    { method: "POST" }
+  );
+}
+
 // Validate client brief
 export interface ClientBriefValidateRequest {
   brand: string;

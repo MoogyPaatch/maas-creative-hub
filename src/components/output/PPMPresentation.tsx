@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
   Film,
   Users,
@@ -6,12 +6,18 @@ import {
   Wrench,
   Image,
   FileText,
+  CheckCircle2,
+  MessageSquare,
+  Loader2,
 } from "lucide-react";
 import SlideShell, { type SlideItem } from "./SlideShell";
 import type { MessageMetadata } from "@/types";
+import { approvePPMGate } from "@/lib/api";
+import { toast } from "sonner";
 
 interface Props {
   metadata: MessageMetadata;
+  projectId?: string;
 }
 
 /* ─── Slide Builders ─── */
@@ -204,18 +210,124 @@ function buildSlides(metadata: MessageMetadata): SlideItem[] {
   return slides;
 }
 
+/* ─── PPM Approval Footer ─── */
+function PPMApprovalFooter({ projectId }: { projectId: string }) {
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [feedback, setFeedback] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [submitted, setSubmitted] = useState<"approved" | "revision" | null>(null);
+
+  const handleApprove = async () => {
+    setLoading(true);
+    try {
+      await approvePPMGate(projectId, "approve");
+      setSubmitted("approved");
+      toast.success("PPM approuvé avec succès");
+    } catch {
+      toast.error("Erreur lors de l'approbation du PPM");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRevision = async () => {
+    if (!feedback.trim()) return;
+    setLoading(true);
+    try {
+      await approvePPMGate(projectId, "revision", feedback.trim());
+      setSubmitted("revision");
+      toast.success("Modifications demandées");
+    } catch {
+      toast.error("Erreur lors de l'envoi des modifications");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (submitted) {
+    return (
+      <div className="border-t border-border bg-card/60 px-6 py-4">
+        <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+          <CheckCircle2 className="h-4 w-4 text-primary" />
+          {submitted === "approved" ? "PPM approuvé" : "Modifications demandées"}
+        </div>
+        {submitted === "revision" && feedback && (
+          <div className="mt-2 rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+            {feedback}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="border-t border-border bg-card/60 px-6 py-4">
+      {showFeedback ? (
+        <div className="space-y-3">
+          <textarea
+            value={feedback}
+            onChange={(e) => setFeedback(e.target.value)}
+            placeholder="Décrivez les modifications souhaitées..."
+            className="h-24 w-full resize-none rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+          />
+          <div className="flex gap-3">
+            <button
+              onClick={handleRevision}
+              disabled={!feedback.trim() || loading}
+              className="flex items-center gap-2 rounded-lg bg-destructive px-5 py-2.5 text-sm font-semibold text-destructive-foreground transition-colors hover:bg-destructive/90 disabled:opacity-50"
+            >
+              {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+              Envoyer les modifications
+            </button>
+            <button
+              onClick={() => setShowFeedback(false)}
+              disabled={loading}
+              className="rounded-lg border border-border px-5 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+            >
+              Annuler
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex gap-3">
+          <button
+            onClick={handleApprove}
+            disabled={loading}
+            className="flex items-center gap-2 rounded-lg bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 hover:shadow-md disabled:opacity-50"
+          >
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+            Approuver le PPM
+          </button>
+          <button
+            onClick={() => setShowFeedback(true)}
+            disabled={loading}
+            className="flex items-center gap-2 rounded-lg border border-border px-5 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+          >
+            <MessageSquare className="h-4 w-4" /> Demander des modifications
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── Main Component ─── */
-const PPMPresentation = ({ metadata }: Props) => {
+const PPMPresentation = ({ metadata, projectId }: Props) => {
   const slides = useMemo(() => buildSlides(metadata), [metadata]);
 
   return (
-    <SlideShell
-      slides={slides}
-      title="Dossier PPM"
-      titleIcon={FileText}
-      slidesUrl={metadata.slides_url}
-      pptxUrl={metadata.pptx_url}
-    />
+    <div className="flex h-full flex-col">
+      <div className="flex-1 overflow-hidden">
+        <SlideShell
+          slides={slides}
+          title="Dossier PPM"
+          titleIcon={FileText}
+          slidesUrl={metadata.slides_url}
+          pptxUrl={metadata.pptx_url}
+        />
+      </div>
+      {projectId && <PPMApprovalFooter projectId={projectId} />}
+    </div>
   );
 };
 

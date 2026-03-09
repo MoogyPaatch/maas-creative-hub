@@ -17,6 +17,8 @@ import {
   rejectValidation,
   uploadFile,
   validateClientBrief,
+  downloadDossierPDF,
+  createShareLink,
 } from "@/lib/api";
 import type { ClientBriefValidateRequest } from "@/lib/api";
 import { parseSSEStream } from "@/lib/sse";
@@ -27,7 +29,7 @@ import ConversationHistory from "@/components/chat/ConversationHistory";
 import { AnimatePresence } from "framer-motion";
 import type { ChatMessage, ProjectStatus, ConversationSummary, ClientBriefDraft, BrandAsset } from "@/types";
 import { EMPTY_BRIEF_DRAFT, CLIENT_BRIEF_REQUIRED_FIELDS } from "@/types";
-import { ArrowLeft, Loader2, History, Shield } from "lucide-react";
+import { ArrowLeft, Loader2, History, Shield, Download, Share2, Copy, Check } from "lucide-react";
 import logoBlack from "@/assets/logo-marcel-black.png";
 import logoWhite from "@/assets/logo-marcel-white.png";
 
@@ -53,6 +55,9 @@ const ProjectPage = () => {
   const [loading, setLoading] = useState(true);
   const [mobileTab, setMobileTab] = useState<"chat" | "output">("chat");
   const [isValidatingBrief, setIsValidatingBrief] = useState(false);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [showShareDialog, setShowShareDialog] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   // Client brief draft state (SSE-driven)
   const [clientBriefDraft, setClientBriefDraft] = useState<ClientBriefDraft>({ ...EMPTY_BRIEF_DRAFT });
@@ -206,17 +211,40 @@ const ProjectPage = () => {
         }));
         setMessages(existingMessages);
 
-        // Restore brief draft from conversation messages
+        // Restore artifacts and brief draft from message history (BUG 3 fix)
+        const artifactTypes = [
+          "creative_brief", "dc_presentation", "dc_copy_result",
+          "ppm_presentation", "campaign_gallery", "validation_required", "delivery"
+        ];
+        const restoredArtifacts: ChatMessage[] = [];
+        let restoredBrief: Partial<ClientBriefDraft> = {};
+
         for (const m of existingMessages) {
-          if (m.metadata?.type === "client_brief_draft" && m.metadata?.brief_draft) {
-            handleBriefDraftUpdate(m.metadata.brief_draft);
+          const meta = m.metadata;
+          if (!meta?.type) continue;
+          if (artifactTypes.includes(meta.type)) {
+            restoredArtifacts.push({
+              role: "agent",
+              content: m.content || "",
+              metadata: meta,
+              timestamp: m.timestamp ? new Date(m.timestamp as any) : new Date(),
+            });
+          }
+          if (meta.type === "client_brief_draft" && meta.brief_draft) {
+            restoredBrief = { ...restoredBrief, ...meta.brief_draft };
           }
         }
 
-        const existingArtifacts: ChatMessage[] = (conv.artifacts || []).map((a: any) => ({
-          role: "agent", content: a.content || "", metadata: a.metadata,
+        // Merge with any artifacts from conv.artifacts (if backend returns them)
+        const backendArtifacts: ChatMessage[] = (conv.artifacts || []).map((a: any) => ({
+          role: "agent" as const, content: a.content || "", metadata: a.metadata,
         }));
-        setArtifacts(existingArtifacts);
+        const allArtifacts = restoredArtifacts.length > 0 ? restoredArtifacts : backendArtifacts;
+        if (allArtifacts.length > 0) setArtifacts(allArtifacts);
+
+        if (Object.keys(restoredBrief).length > 0) {
+          handleBriefDraftUpdate(restoredBrief as Partial<ClientBriefDraft>);
+        }
 
         // Also check if conv has brief_client_draft
         if (conv.brief_client_draft) {
@@ -417,23 +445,36 @@ const ProjectPage = () => {
     try {
       const conv = await getConversation(convId);
       setConversationId(conv.conversation_id);
-      const msgs = (conv.messages || []).map((m: any) => ({
+      const msgs: ChatMessage[] = (conv.messages || []).map((m: any) => ({
         role: m.role === "user" ? "user" : "agent",
         content: m.content || "",
         quickReplies: m.quick_replies?.map((qr: any) => ({ id: qr.id, label: qr.label })),
         metadata: m.metadata,
       }));
       setMessages(msgs);
-      setArtifacts(
-        (conv.artifacts || []).map((a: any) => ({ role: "agent", content: a.content || "", metadata: a.metadata }))
-      );
-      // Restore brief draft
+
+      // Restore artifacts from message history
+      const artifactTypes = [
+        "creative_brief", "dc_presentation", "dc_copy_result",
+        "ppm_presentation", "campaign_gallery", "validation_required", "delivery"
+      ];
+      const restoredArtifacts: ChatMessage[] = [];
       setClientBriefDraft({ ...EMPTY_BRIEF_DRAFT });
+
       for (const m of msgs) {
-        if (m.metadata?.type === "client_brief_draft" && m.metadata?.brief_draft) {
-          handleBriefDraftUpdate(m.metadata.brief_draft);
+        const meta = m.metadata;
+        if (!meta?.type) continue;
+        if (artifactTypes.includes(meta.type)) {
+          restoredArtifacts.push({ role: "agent", content: m.content || "", metadata: meta, timestamp: new Date() });
+        }
+        if (meta.type === "client_brief_draft" && meta.brief_draft) {
+          handleBriefDraftUpdate(meta.brief_draft);
         }
       }
+
+      const backendArtifacts = (conv.artifacts || []).map((a: any) => ({ role: "agent" as const, content: a.content || "", metadata: a.metadata }));
+      setArtifacts(restoredArtifacts.length > 0 ? restoredArtifacts : backendArtifacts);
+
       if (conv.brief_client_draft) handleBriefDraftUpdate(conv.brief_client_draft);
       setShowHistory(false);
     } catch {
@@ -443,6 +484,42 @@ const ProjectPage = () => {
 
   const hasPendingValidation = projectStatus?.pending_validations?.some((v) => v.status === "pending");
 
+  const handleDownloadDossier = useCallback(async () => {
+    if (!id) return;
+    try {
+      toast.info("Préparation du dossier PDF...");
+      const blob = await downloadDossierPDF(id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `dossier-${id}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Dossier téléchargé");
+    } catch {
+      toast.error("Impossible de télécharger le dossier");
+    }
+  }, [id]);
+
+  const handleShare = useCallback(async () => {
+    if (!id) return;
+    try {
+      const result = await createShareLink(id);
+      setShareUrl(result.share_url);
+      setShowShareDialog(true);
+    } catch {
+      toast.error("Impossible de créer le lien de partage");
+    }
+  }, [id]);
+
+  const handleCopyShareUrl = useCallback(() => {
+    if (!shareUrl) return;
+    navigator.clipboard.writeText(shareUrl);
+    setCopied(true);
+    toast.success("Lien copié !");
+    setTimeout(() => setCopied(false), 2000);
+  }, [shareUrl]);
+
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
@@ -450,6 +527,9 @@ const ProjectPage = () => {
       </div>
     );
   }
+
+
+
 
   const outputPanelProps = {
     artifacts,
@@ -468,6 +548,7 @@ const ProjectPage = () => {
     isClientView: isClient,
     isStreaming,
     isValidatingBrief,
+    projectId: id,
   };
 
   return (
@@ -508,7 +589,25 @@ const ProjectPage = () => {
           />
         </div>
 
-        <div className="hidden sm:flex items-center gap-4">
+        <div className="hidden sm:flex items-center gap-2">
+          {isAgency && (
+            <>
+              <button
+                onClick={handleDownloadDossier}
+                className="flex h-8 w-8 items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                title="Télécharger le dossier"
+              >
+                <Download className="h-4 w-4" />
+              </button>
+              <button
+                onClick={handleShare}
+                className="flex h-8 w-8 items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                title="Partager"
+              >
+                <Share2 className="h-4 w-4" />
+              </button>
+            </>
+          )}
           {isAgency && conversations.length > 1 && (
             <button
               onClick={() => setShowHistory(!showHistory)}
@@ -523,6 +622,30 @@ const ProjectPage = () => {
           <span className="text-[10px] text-muted-foreground font-medium">{user?.email}</span>
         </div>
       </header>
+
+      {/* Share dialog */}
+      {showShareDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowShareDialog(false)}>
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-foreground mb-4">Lien de partage</h3>
+            <div className="flex gap-2">
+              <input
+                readOnly
+                value={shareUrl || ""}
+                className="flex-1 rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground"
+              />
+              <button
+                onClick={handleCopyShareUrl}
+                className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition"
+              >
+                {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                {copied ? "Copié" : "Copier"}
+              </button>
+            </div>
+            <p className="mt-3 text-xs text-muted-foreground">Ce lien donne accès en lecture seule au dossier.</p>
+          </div>
+        </div>
+      )}
 
       {/* Desktop */}
       <div className="hidden md:flex flex-1 overflow-hidden relative">

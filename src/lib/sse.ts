@@ -49,10 +49,15 @@ export async function parseSSEStream(
               continue;
             }
 
-            // Status update with phase_label → route to thinking indicator
-            if (data.metadata?.type === "status_update" && data.metadata?.status === "working" && data.metadata?.phase_label) {
-              onThinking?.(data.metadata.phase_label);
-              continue;
+            // Status update → route to thinking or let completed fall through
+            if (data.metadata?.type === "status_update") {
+              if (data.metadata?.status === "working" && data.metadata?.phase_label) {
+                onThinking?.(data.metadata.phase_label);
+                continue;
+              }
+              if (data.metadata?.status === "completed") {
+                // Let completed status_update fall through to normal message handling
+              }
             }
 
             // action_required → handle user choices/validation
