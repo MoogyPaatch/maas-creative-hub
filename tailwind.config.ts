@@ -101,6 +101,10 @@ export default {
           "0%, 80%, 100%": { opacity: "0.3", transform: "scale(0.8)" },
           "40%": { opacity: "1", transform: "scale(1)" },
         },
+        "brief-field-flash": {
+          "0%": { backgroundColor: "hsl(var(--primary) / 0.15)" },
+          "100%": { backgroundColor: "transparent" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
