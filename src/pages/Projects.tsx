@@ -6,11 +6,12 @@ import { toast } from "sonner";
 import { motion } from "framer-motion";
 import {
   Plus, Clock, CheckCircle2, AlertCircle, Loader2, Search, Filter,
-  LayoutGrid, Columns3, AlertTriangle, ArrowRight, LogOut, Bell, ChevronRight, Trash2,
+  LayoutGrid, Columns3, AlertTriangle, ArrowRight, LogOut, Bell, ChevronRight, Trash2, X,
 } from "lucide-react";
 import { WORKFLOW_STEPS, CLIENT_PHASES, getClientPhaseIndex, getClientPhaseLabel } from "@/types";
 import type { Project } from "@/types";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Checkbox } from "@/components/ui/checkbox";
 import logoBlack from "@/assets/logo-marcel-black.png";
 import logoWhite from "@/assets/logo-marcel-white.png";
 
