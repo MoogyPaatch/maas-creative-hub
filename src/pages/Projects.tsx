@@ -1,12 +1,12 @@
 import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { getProjects, createConversation } from "@/lib/api";
+import { getProjects, createConversation, deleteProject } from "@/lib/api";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import {
   Plus, Clock, CheckCircle2, AlertCircle, Loader2, Search, Filter,
-  LayoutGrid, Columns3, AlertTriangle, ArrowRight, LogOut, Bell, ChevronRight,
+  LayoutGrid, Columns3, AlertTriangle, ArrowRight, LogOut, Bell, ChevronRight, Trash2,
 } from "lucide-react";
 import { WORKFLOW_STEPS, CLIENT_PHASES, getClientPhaseIndex, getClientPhaseLabel } from "@/types";
 import type { Project } from "@/types";
@@ -314,6 +314,7 @@ const Projects = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [deleting, setDeleting] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [filterPhase, setFilterPhase] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<SortKey>("date");
@@ -322,11 +323,15 @@ const Projects = () => {
   const isAgency = user?.role === "agency" || user?.role === "admin";
 
   useEffect(() => {
+    loadProjects();
+  }, []);
+
+  const loadProjects = () => {
     getProjects()
       .then((data) => setProjects(data))
       .catch(() => toast.error("Impossible de charger les projets"))
       .finally(() => setLoading(false));
-  }, []);
+  };
 
   const handleNew = async () => {
     setCreating(true);
@@ -336,6 +341,23 @@ const Projects = () => {
     } catch {
       toast.error("Impossible de créer le projet");
       setCreating(false);
+    }
+  };
+
+  const handleDelete = async (projectId: string, projectName: string) => {
+    if (!window.confirm(`Êtes-vous sûr de vouloir supprimer le projet "${projectName}" ? Cette action est irréversible.`)) {
+      return;
+    }
+
+    setDeleting(projectId);
+    try {
+      await deleteProject(projectId);
+      toast.success("Projet supprimé avec succès");
+      loadProjects(); // Recharger la liste
+    } catch {
+      toast.error("Impossible de supprimer le projet");
+    } finally {
+      setDeleting(null);
     }
   };
 
@@ -553,26 +575,50 @@ const Projects = () => {
                         <motion.div
                           key={p.id}
                           layout
-                          onClick={() => navigate(`/project/${p.id}`)}
-                          className="group cursor-pointer border border-border p-4 transition-all hover:border-foreground"
+                          className="group border border-border p-4 transition-all hover:border-foreground"
                         >
-                          <h4 className="text-sm font-bold text-foreground truncate">
-                            {p.client_name || "Nouvelle campagne"}
-                          </h4>
-                          <div className="mt-3 flex items-center justify-between">
-                            <span className="text-[10px] text-muted-foreground font-medium">
-                              {new Date(p.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
-                            </span>
-                            <span className={`flex items-center gap-1 text-[10px] font-bold ${sc.color}`}>
-                              {sc.icon}
-                            </span>
+                          <div className="flex items-start justify-between mb-2">
+                            <h4 
+                              onClick={() => navigate(`/project/${p.id}`)}
+                              className="text-sm font-bold text-foreground truncate cursor-pointer hover:text-accent transition-colors flex-1"
+                            >
+                              {p.client_name || "Nouvelle campagne"}
+                            </h4>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDelete(p.id, p.client_name || "Nouvelle campagne");
+                              }}
+                              disabled={deleting === p.id}
+                              className="ml-2 p-1 text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
+                              title="Supprimer le projet"
+                            >
+                              {deleting === p.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-3.5 w-3.5" />
+                              )}
+                            </button>
                           </div>
-                          {p.pending_validation && (
-                            <div className="mt-3 flex items-center gap-1.5 text-[10px] font-bold text-accent">
-                              <AlertTriangle className="h-3 w-3" />
-                              Action requise
+                          <div 
+                            onClick={() => navigate(`/project/${p.id}`)}
+                            className="cursor-pointer"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] text-muted-foreground font-medium">
+                                {new Date(p.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
+                              </span>
+                              <span className={`flex items-center gap-1 text-[10px] font-bold ${sc.color}`}>
+                                {sc.icon}
+                              </span>
                             </div>
-                          )}
+                            {p.pending_validation && (
+                              <div className="mt-3 flex items-center gap-1.5 text-[10px] font-bold text-accent">
+                                <AlertTriangle className="h-3 w-3" />
+                                Action requise
+                              </div>
+                            )}
+                          </div>
                         </motion.div>
                       );
                     })}
@@ -598,8 +644,7 @@ const Projects = () => {
                   initial={{ opacity: 0, y: 16 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.04 }}
-                  onClick={() => navigate(`/project/${p.id}`)}
-                  className="group cursor-pointer border border-border overflow-hidden transition-all duration-300 hover:border-foreground"
+                  className="group border border-border overflow-hidden transition-all duration-300 hover:border-foreground"
                 >
                   <div className="h-1 w-full bg-secondary">
                     <motion.div
@@ -609,7 +654,10 @@ const Projects = () => {
                       className="h-full bg-foreground"
                     />
                   </div>
-                  <div className="p-6">
+                  <div 
+                    onClick={() => navigate(`/project/${p.id}`)}
+                    className="p-6 cursor-pointer"
+                  >
                     <div className="flex items-center justify-between mb-4">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                         {getPhaseLabel(p.supervisor_phase)}
@@ -624,6 +672,21 @@ const Projects = () => {
                         <span className={`flex items-center gap-1 text-[10px] font-bold ${sc.color}`}>
                           {sc.icon} {sc.label}
                         </span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(p.id, name);
+                          }}
+                          disabled={deleting === p.id}
+                          className="ml-2 p-1 text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50 opacity-0 group-hover:opacity-100"
+                          title="Supprimer le projet"
+                        >
+                          {deleting === p.id ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3 w-3" />
+                          )}
+                        </button>
                       </div>
                     </div>
                     <h3 className="text-lg font-bold text-foreground group-hover:text-accent transition-colors">
