@@ -33,6 +33,7 @@ interface Props {
   currentStep?: string;
   isClientView?: boolean;
   isStreaming?: boolean;
+  isValidatingBrief?: boolean;
 }
 
 function briefToMarkdown(brief: BriefData): string {
