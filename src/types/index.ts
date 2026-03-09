@@ -93,6 +93,22 @@ export const CLIENT_BRIEF_FIELD_DEFS: ClientBriefFieldDef[] = [
   { key: "additional_context", label: "Contexte additionnel", placeholder: "Tout ce qui est important et ne rentre pas dans les cases", tier: "enrichment" },
 ];
 
+// ── Empty Brief Draft ─────────────────────────────────────────────────────
+
+export const EMPTY_BRIEF_DRAFT: ClientBriefDraft = {
+  brand: null,
+  product: null,
+  objective: null,
+  target: null,
+  tone: null,
+  formats: null,
+  promise: null,
+  reason_to_believe: null,
+  creative_references: null,
+  constraints: null,
+  additional_context: null,
+};
+
 // ── Legacy BriefData (kept for creative brief compatibility) ─────────────
 
 export interface BriefData {
