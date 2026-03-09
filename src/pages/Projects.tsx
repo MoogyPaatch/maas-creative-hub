@@ -316,6 +316,9 @@ const Projects = () => {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectMode, setSelectMode] = useState(false);
   const [search, setSearch] = useState("");
   const [filterPhase, setFilterPhase] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<SortKey>("date");
