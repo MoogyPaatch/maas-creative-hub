@@ -1,12 +1,22 @@
 import type { ChatMessage, QuickReply, ClientBriefDraft } from "@/types";
 
+export interface SSECallbacks {
+  onMessage: (msg: ChatMessage) => void;
+  onDone?: () => void;
+  onThinking?: (label: string) => void;
+  onBriefDraft?: (draft: Partial<ClientBriefDraft>) => void;
+  onActionRequired?: (action: string, options?: string[], validationData?: any) => void;
+  onTimeout?: () => void;
+}
+
 export async function parseSSEStream(
   stream: ReadableStream<Uint8Array>,
   onMessage: (msg: ChatMessage) => void,
   onDone?: () => void,
   onThinking?: (label: string) => void,
   onBriefDraft?: (draft: Partial<ClientBriefDraft>) => void,
-  onActionRequired?: (action: string, options?: string[], validationData?: any) => void
+  onActionRequired?: (action: string, options?: string[], validationData?: any) => void,
+  onTimeout?: () => void
 ): Promise<void> {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
@@ -27,6 +37,12 @@ export async function parseSSEStream(
           try {
             const data = JSON.parse(line.slice(6));
 
+            // Workflow timeout
+            if (data.role === "system" && data.content === "workflow_timeout") {
+              onTimeout?.();
+              continue;
+            }
+
             // Thinking indicator
             if (data.role === "thinking" && onThinking) {
               onThinking(data.content || "Traitement en cours...");
@@ -39,13 +55,6 @@ export async function parseSSEStream(
               continue;
             }
 
-            // Client brief draft → update brief panel in real-time
-            if (data.metadata?.type === "client_brief_draft" && data.metadata?.brief_draft) {
-              onBriefDraft?.(data.metadata.brief_draft);
-              // Also emit as a regular message if there's content
-              if (!data.content) continue;
-            }
-
             // action_required → handle user choices/validation
             if (data.metadata?.type === "action_required") {
               onActionRequired?.(
@@ -53,7 +62,6 @@ export async function parseSSEStream(
                 data.metadata.options,
                 data.metadata.validation_data
               );
-              // Convert options to quick replies if available
               const quickReplies: QuickReply[] = data.metadata.options?.map((option: string, idx: number) => ({
                 id: `action_${idx}`,
                 label: option
@@ -77,6 +85,12 @@ export async function parseSSEStream(
               const quickReplies: QuickReply[] | undefined = data.quick_replies?.map(
                 (qr: any) => ({ id: qr.id, label: qr.label })
               );
+
+              // Check for brief draft in metadata
+              if (data.metadata?.type === "client_brief_draft" && data.metadata?.brief_draft) {
+                onBriefDraft?.(data.metadata.brief_draft);
+                if (!data.content) continue;
+              }
 
               onMessage({
                 role,

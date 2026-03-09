@@ -82,10 +82,6 @@ export async function createProject() {
   return request<any>("/projects", { method: "POST", body: JSON.stringify({}) });
 }
 
-export async function deleteProject(id: string) {
-  return request<any>(`/projects/${id}`, { method: "DELETE" });
-}
-
 // Conversations
 export async function createConversation(
   projectId: string | null,
@@ -106,7 +102,6 @@ export async function getConversation(conversationId: string) {
   return request<any>(`/conversations/${conversationId}`);
 }
 
-// Get all conversations for a project
 export async function getProjectConversations(projectId: string) {
   return request<any[]>(`/projects/${projectId}/conversations`);
 }
@@ -138,27 +133,47 @@ export async function sendMessageSSE(
   return res.body;
 }
 
-// Upload file to a conversation
-export async function uploadFile(conversationId: string, file: File): Promise<any> {
-  const formData = new FormData();
-  formData.append("file", file);
+// Upload file via presigned GCS URL
+export async function uploadFile(projectId: string, file: File): Promise<any> {
+  const mimeType = file.type || "application/octet-stream";
 
-  const res = await fetch(`${API_URL}/conversations/${conversationId}/upload`, {
+  // Step 1: Get presigned URL
+  const presign = await request<{ upload_url: string; gcs_path: string; expires_in: number }>(
+    "/storage/presign",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        filename: file.name,
+        mime_type: mimeType,
+        category: "reference",
+      }),
+    }
+  );
+
+  // Step 2: Upload raw file to GCS (no auth header, no FormData)
+  const uploadResp = await fetch(presign.upload_url, {
+    method: "PUT",
+    headers: { "Content-Type": mimeType },
+    body: file,
+  });
+  if (!uploadResp.ok) {
+    throw new Error(`Upload to storage failed: ${uploadResp.status}`);
+  }
+
+  // Step 3: Register asset in DB
+  const asset = await request<any>("/brand-assets", {
     method: "POST",
-    headers: { ...authHeaders() },
-    body: formData,
+    body: JSON.stringify({
+      name: file.name,
+      gcs_path: presign.gcs_path,
+      category: "reference",
+      mime_type: mimeType,
+      file_size: file.size,
+      project_id: projectId,
+    }),
   });
 
-  if (res.status === 401) {
-    localStorage.removeItem("maas_token");
-    window.location.href = "/login";
-    throw new Error("Session expirée");
-  }
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`Upload error ${res.status}: ${text}`);
-  }
-  return res.json();
+  return asset;
 }
 
 // Validations
@@ -198,13 +213,14 @@ export async function rejectValidation(id: string, feedback: string) {
 
 // Brief
 export async function getBrief(projectId: string) {
-  return request<any>(`/projects/${projectId}/brief`, { silent404: true });
+  const briefs = await request<any[]>(`/briefs/project/${projectId}`, { silent404: true });
+  return briefs.length > 0 ? briefs[0] : null;
 }
 
-export async function updateBrief(projectId: string, briefData: Record<string, unknown>) {
-  return request<any>(`/projects/${projectId}/brief`, {
-    method: "PATCH",
-    body: JSON.stringify(briefData),
+export async function updateBrief(briefId: string, data: { raw_content?: string; status?: string }) {
+  return request<any>(`/briefs/${briefId}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
   });
 }
 
@@ -225,15 +241,24 @@ export async function getAssetAccessUrl(assetId: string) {
   return request<{ url: string }>(`/assets/${assetId}/access-url`);
 }
 
-// DAM / Export
-export async function getProjectExport(projectId: string) {
-  return request<{ zip_url: string; assets: any[] }>(`/projects/${projectId}/export`);
+// Validate client brief
+export interface ClientBriefValidateRequest {
+  brand: string;
+  product?: string;
+  objective: string;
+  target: string;
+  tone: string;
+  formats: string;
+  promise?: string;
+  reason_to_believe?: string;
+  creative_references?: string;
+  constraints?: string;
+  additional_context?: string;
 }
 
-// Validate client brief
 export async function validateClientBrief(
   conversationId: string,
-  briefData: Record<string, string>
+  briefData: ClientBriefValidateRequest
 ): Promise<ReadableStream<Uint8Array> | null> {
   const res = await fetch(`${API_URL}/conversations/${conversationId}/brief-client/validate`, {
     method: "POST",

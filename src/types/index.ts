@@ -263,10 +263,14 @@ export interface ChatMessage {
 
 export interface ConversationSummary {
   conversation_id: string;
+  project_id?: string;
+  agency_mode?: boolean;
+  target_agent?: string | null;
+  total_messages: number;
+  last_message_preview?: string | null;
+  last_message_at?: string | null;
   created_at: string;
-  message_count: number;
-  last_message_preview?: string;
-  target_agent?: string;
+  updated_at?: string;
 }
 
 export interface ConversationResponse {

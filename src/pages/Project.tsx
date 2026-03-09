@@ -16,6 +16,7 @@ import {
   uploadFile,
   validateClientBrief,
 } from "@/lib/api";
+import type { ClientBriefValidateRequest } from "@/lib/api";
 import { parseSSEStream } from "@/lib/sse";
 import ChatPanel from "@/components/chat/ChatPanel";
 import OutputPanel from "@/components/output/OutputPanel";
@@ -23,7 +24,7 @@ import WorkflowStepper from "@/components/layout/WorkflowStepper";
 import ConversationHistory from "@/components/chat/ConversationHistory";
 import { AnimatePresence } from "framer-motion";
 import type { ChatMessage, ProjectStatus, ConversationSummary, ClientBriefDraft } from "@/types";
-import { EMPTY_BRIEF_DRAFT } from "@/types";
+import { EMPTY_BRIEF_DRAFT, CLIENT_BRIEF_REQUIRED_FIELDS } from "@/types";
 import { ArrowLeft, Loader2, History, Shield } from "lucide-react";
 import logoBlack from "@/assets/logo-marcel-black.png";
 import logoWhite from "@/assets/logo-marcel-white.png";
@@ -45,6 +46,7 @@ const ProjectPage = () => {
   const [isStreaming, setIsStreaming] = useState(false);
   const [projectStatus, setProjectStatus] = useState<ProjectStatus | null>(null);
   const [briefData, setBriefData] = useState<any>(null);
+  const [briefId, setBriefId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [mobileTab, setMobileTab] = useState<"chat" | "output">("chat");
   const [isValidatingBrief, setIsValidatingBrief] = useState(false);
@@ -87,19 +89,33 @@ const ProjectPage = () => {
   // Validate brief
   const handleValidateClientBrief = useCallback(async () => {
     if (!conversationId || isValidatingBrief) return;
+
+    // Check required fields
+    const missingFields = CLIENT_BRIEF_REQUIRED_FIELDS.filter(
+      (field) => !clientBriefDraft[field] || clientBriefDraft[field]!.trim() === ""
+    );
+    if (missingFields.length > 0) {
+      toast.error("Veuillez remplir tous les champs obligatoires (Marque, Objectif, Cible, Tonalité, Formats)");
+      return;
+    }
+
     setIsValidatingBrief(true);
     try {
-      // Filter out null, undefined or empty fields
-      const cleanBrief = Object.fromEntries(
-        Object.entries(clientBriefDraft).filter(([_, v]) => v != null && v !== "")
-      );
-      
-      if (Object.keys(cleanBrief).length === 0) {
-        toast.error("Aucun champ rempli à valider");
-        return;
-      }
+      const payload: ClientBriefValidateRequest = {
+        brand: clientBriefDraft.brand || "",
+        product: clientBriefDraft.product || undefined,
+        objective: clientBriefDraft.objective || "",
+        target: clientBriefDraft.target || "",
+        tone: clientBriefDraft.tone || "",
+        formats: clientBriefDraft.formats || "",
+        promise: clientBriefDraft.promise || undefined,
+        reason_to_believe: clientBriefDraft.reason_to_believe || undefined,
+        creative_references: clientBriefDraft.creative_references || undefined,
+        constraints: clientBriefDraft.constraints || undefined,
+        additional_context: clientBriefDraft.additional_context || undefined,
+      };
 
-      const stream = await validateClientBrief(conversationId, cleanBrief);
+      const stream = await validateClientBrief(conversationId, payload);
       if (stream) await handleSSEStream(stream);
     } catch {
       toast.error("Erreur lors de la validation du brief");
@@ -116,7 +132,7 @@ const ProjectPage = () => {
         (convs || []).map((c: any) => ({
           conversation_id: c.conversation_id || c.id,
           created_at: c.created_at,
-          message_count: c.message_count || 0,
+          total_messages: c.total_messages || 0,
           last_message_preview: c.last_message_preview || c.last_message,
           target_agent: c.target_agent,
         }))
@@ -133,7 +149,12 @@ const ProjectPage = () => {
           getProject(id),
         ]);
         if (status) setProjectStatus(status);
-        getBrief(id).then(setBriefData).catch(() => {});
+        getBrief(id).then((brief) => {
+          if (brief) {
+            setBriefData(brief);
+            setBriefId(brief.id);
+          }
+        }).catch(() => {});
         getPPM(id).then((ppmData) => {
           if (ppmData) {
             setArtifacts((prev) => {
@@ -237,7 +258,12 @@ const ProjectPage = () => {
         setIsStreaming(false);
         if (id) {
           getProjectStatus(id).then(setProjectStatus).catch(() => {});
-          getBrief(id).then(setBriefData).catch(() => {});
+          getBrief(id).then((brief) => {
+            if (brief) {
+              setBriefData(brief);
+              setBriefId(brief.id);
+            }
+          }).catch(() => {});
           getPPM(id).then((ppmData) => {
             if (ppmData) {
               setArtifacts((prev) => {
@@ -257,8 +283,10 @@ const ProjectPage = () => {
       (label) => setThinking(label),
       handleBriefDraftUpdate,
       (action, options, validationData) => {
-        // Handle action_required events - for now just log
         console.log("Action required:", { action, options, validationData });
+      },
+      () => {
+        toast.info("Le traitement continue en arrière-plan. Rafraîchissez la page dans quelques instants.");
       }
     );
   }, [id, handleBriefDraftUpdate]);
@@ -326,7 +354,7 @@ const ProjectPage = () => {
   }, [handleSSEStream]);
 
   const handleAttach = useCallback(async (files: FileList) => {
-    if (!conversationId) return;
+    if (!id) return;
     for (const file of Array.from(files)) {
       if (file.size / (1024 * 1024) > 20) {
         toast.error(`${file.name} dépasse 20 MB`);
@@ -334,11 +362,11 @@ const ProjectPage = () => {
       }
       try {
         toast.info(`Upload de ${file.name}...`);
-        await uploadFile(conversationId, file);
+        await uploadFile(id, file);
         setMessages((prev) => [...prev, { role: "user", content: `📎 ${file.name}`, timestamp: new Date() }]);
         toast.success(`${file.name} envoyé`);
         const ext = file.name.split(".").pop()?.toLowerCase();
-        if (ext === "pdf" || ext === "docx" || ext === "doc") {
+        if (conversationId && (ext === "pdf" || ext === "docx" || ext === "doc")) {
           const stream = await sendMessageSSE(conversationId, "text", "extract-brief", true);
           await handleSSEStream(stream);
         }
@@ -346,7 +374,7 @@ const ProjectPage = () => {
         toast.error(`Échec de l'upload de ${file.name}`);
       }
     }
-  }, [conversationId, handleSSEStream]);
+  }, [id, conversationId, handleSSEStream]);
 
   const handleSelectConversation = useCallback(async (convId: string) => {
     try {
