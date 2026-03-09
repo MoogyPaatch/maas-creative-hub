@@ -257,7 +257,7 @@ export interface ChatMessage {
   role: "user" | "agent" | "system";
   content: string;
   quickReplies?: QuickReply[];
-  metadata?: MessageMetadata;
+  metadata?: ChatMessageMetadata;
   timestamp?: Date;
 }
 

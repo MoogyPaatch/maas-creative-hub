@@ -13,6 +13,11 @@ const ChatMessageBubble = ({ message, showQuickReplies, onQuickReply }: Props) =
   const isUser = message.role === "user";
   const [hovered, setHovered] = useState(false);
 
+  // Don't render empty bubbles unless they have action metadata
+  if (!message.content?.trim() && !message.metadata?.action) {
+    return null;
+  }
+
   const time = message.timestamp
     ? new Date(message.timestamp).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
     : null;

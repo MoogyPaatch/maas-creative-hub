@@ -208,15 +208,19 @@ const LiveBriefPreview = ({
           <div className="mt-8 flex justify-center">
             <button
               onClick={onValidate}
-              disabled={!canValidate || isStreaming}
+              disabled={!canValidate || isStreaming || isValidating}
               className={`flex items-center gap-2 px-8 py-3 text-sm font-bold uppercase tracking-wider transition-all ${
-                canValidate && !isStreaming
+                canValidate && !isStreaming && !isValidating
                   ? "bg-foreground text-background hover:opacity-90"
                   : "bg-muted text-muted-foreground cursor-not-allowed"
               }`}
             >
-              <Send className="h-4 w-4" />
-              Valider le Brief
+              {isValidating ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+              {isValidating ? "Validation..." : "Valider le Brief"}
             </button>
             {!canValidate && (
               <p className="mt-2 text-[10px] text-muted-foreground text-center absolute -bottom-6">

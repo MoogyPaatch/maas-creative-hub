@@ -1,6 +1,6 @@
 import { toast } from "sonner";
 
-const API_URL = import.meta.env.VITE_API_URL || "https://maas-backend-rmbomgmltq-ew.a.run.app/api";
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8001/api";
 
 function getToken(): string | null {
   return localStorage.getItem("maas_token");

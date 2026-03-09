@@ -46,6 +46,30 @@ export async function parseSSEStream(
               if (!data.content) continue;
             }
 
+            // action_required → handle user choices/validation
+            if (data.metadata?.type === "action_required") {
+              onActionRequired?.(
+                data.metadata.action,
+                data.metadata.options,
+                data.metadata.validation_data
+              );
+              // Convert options to quick replies if available
+              const quickReplies: QuickReply[] = data.metadata.options?.map((option: string, idx: number) => ({
+                id: `action_${idx}`,
+                label: option
+              })) || [];
+              
+              onMessage({
+                role: "agent",
+                content: data.content || data.metadata.message || "",
+                quickReplies: quickReplies.length > 0 ? quickReplies : undefined,
+                metadata: data.metadata,
+                timestamp: new Date(),
+              });
+              messageCount++;
+              continue;
+            }
+
             if (data.role !== "thinking") {
               const role: ChatMessage["role"] =
                 data.role === "user" || data.role === "system" ? data.role : "agent";

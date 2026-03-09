@@ -400,6 +400,7 @@ const ProjectPage = () => {
     currentStep: projectStatus?.current_step || "commercial",
     isClientView: isClient,
     isStreaming,
+    isValidatingBrief,
   };
 
   return (
