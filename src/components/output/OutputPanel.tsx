@@ -224,7 +224,7 @@ const OutputPanel = ({
             )}
             {active?.type === "ppm_presentation" && active.metadata && (
               <motion.div key={`ppm-${activeIndex}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="h-full">
-                <PPMPresentation metadata={active.metadata} />
+                <PPMPresentation metadata={active.metadata} projectId={projectId} />
               </motion.div>
             )}
             {active?.type === "campaign_gallery" && active.metadata && (
