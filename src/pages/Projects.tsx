@@ -732,14 +732,21 @@ const Projects = () => {
                     />
                   </div>
                   <div 
-                    onClick={() => navigate(`/project/${p.id}`)}
-                    className="p-6 cursor-pointer"
+                    onClick={() => !selectMode && navigate(`/project/${p.id}`)}
+                    className={`p-6 ${selectMode ? "cursor-default" : "cursor-pointer"}`}
                   >
                     <div className="flex items-center justify-between mb-4">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                         {getPhaseLabel(p.supervisor_phase)}
                       </span>
                       <div className="flex items-center gap-2">
+                        {selectMode && (
+                          <Checkbox
+                            checked={selectedIds.has(p.id)}
+                            onCheckedChange={() => toggleProjectSelection(p.id)}
+                            className="mr-2"
+                          />
+                        )}
                         {p.pending_validation && (
                           <span className="flex items-center gap-1 text-[10px] font-bold text-accent">
                             <AlertTriangle className="h-3 w-3" />
