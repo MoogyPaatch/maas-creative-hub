@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Loader2 } from "lucide-react";
 import logoWhite from "@/assets/logo-marcel-white.png";
 import logoBlack from "@/assets/logo-marcel-black.png";
+import logoLion from "@/assets/logo-marcel-lion-black.png";
 
 const taglines = [
   "Make things that change things.",
@@ -48,7 +49,7 @@ const Login = () => {
         <div className="absolute top-0 left-0 w-1 h-full bg-accent" />
         
         <div>
-          <img src={logoWhite} alt="Marcel" className="h-14 w-auto" />
+          <img src={logoLion} alt="Marcel" className="h-24 w-auto invert" />
         </div>
 
         <div className="space-y-6">
