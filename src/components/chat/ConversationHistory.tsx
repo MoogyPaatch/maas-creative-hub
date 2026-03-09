@@ -56,8 +56,8 @@ const ConversationHistory = ({ conversations, activeId, onSelect, onClose }: Pro
                   hour: "2-digit",
                   minute: "2-digit",
                 })}
-                {conv.message_count > 0 && (
-                  <span className="ml-auto">{conv.message_count} msg</span>
+                {conv.total_messages > 0 && (
+                  <span className="ml-auto">{conv.total_messages} msg</span>
                 )}
               </div>
               {conv.last_message_preview && (
