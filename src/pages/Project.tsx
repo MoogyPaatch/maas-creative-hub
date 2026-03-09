@@ -255,7 +255,11 @@ const ProjectPage = () => {
         }
       },
       (label) => setThinking(label),
-      handleBriefDraftUpdate
+      handleBriefDraftUpdate,
+      (action, options, validationData) => {
+        // Handle action_required events - for now just log
+        console.log("Action required:", { action, options, validationData });
+      }
     );
   }, [id, handleBriefDraftUpdate]);
 
