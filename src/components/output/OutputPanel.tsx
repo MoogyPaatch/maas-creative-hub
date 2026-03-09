@@ -70,7 +70,7 @@ const OutputPanel = ({
   clientBriefDraft, changedBriefFields, onClientBriefFieldChange, onValidateClientBrief,
   onSelectPiste, onApprove, onReject,
   brandAssets = [], onBrandAssetsChange, highlightAssetCategories,
-  showAssetsTab = true, onBriefChange, currentStep, isClientView = false, isStreaming = false,
+  showAssetsTab = true, onBriefChange, currentStep, isClientView = false, isStreaming = false, isValidatingBrief = false,
 }: Props) => {
   const agencyOnlyTypes = new Set(["creative_brief", "dc_copy_result"]);
 
