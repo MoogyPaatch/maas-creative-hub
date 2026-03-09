@@ -308,3 +308,31 @@ export const CLIENT_WORKFLOW_STEPS: { key: WorkflowStep; label: string; shortLab
   { key: "ppm", label: "Pré-Production", shortLabel: "PPM" },
   { key: "delivered", label: "Livraison", shortLabel: "Livré" },
 ];
+
+// ── Client Phases (mapping interne → 4 étapes client) ───────────────────
+
+export interface ClientPhase {
+  key: string;
+  label: string;
+  shortLabel: string;
+  internalSteps: string[];
+}
+
+export const CLIENT_PHASES: ClientPhase[] = [
+  { key: "brief", label: "Brief Client", shortLabel: "Brief", internalSteps: ["commercial"] },
+  { key: "dc", label: "Direction Créative", shortLabel: "Création", internalSteps: ["planner", "dc_visual", "dc_copy"] },
+  { key: "ppm", label: "Pré-Production", shortLabel: "PPM", internalSteps: ["ppm"] },
+  { key: "delivery", label: "Livraison", shortLabel: "Livraison", internalSteps: ["prod_image", "prod_video", "prod_audio", "delivered", "finished"] },
+];
+
+export function getClientPhaseIndex(phase: string | null): number {
+  if (!phase) return 0;
+  const idx = CLIENT_PHASES.findIndex((cp) => cp.internalSteps.includes(phase));
+  return idx >= 0 ? idx : 0;
+}
+
+export function getClientPhaseLabel(phase: string | null): string {
+  if (!phase) return "Nouveau";
+  const idx = getClientPhaseIndex(phase);
+  return CLIENT_PHASES[idx].label;
+}
