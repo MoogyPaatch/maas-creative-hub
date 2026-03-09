@@ -344,6 +344,23 @@ const Projects = () => {
     }
   };
 
+  const handleDelete = async (projectId: string, projectName: string) => {
+    if (!window.confirm(`Êtes-vous sûr de vouloir supprimer le projet "${projectName}" ? Cette action est irréversible.`)) {
+      return;
+    }
+
+    setDeleting(projectId);
+    try {
+      await deleteProject(projectId);
+      toast.success("Projet supprimé avec succès");
+      loadProjects(); // Recharger la liste
+    } catch {
+      toast.error("Impossible de supprimer le projet");
+    } finally {
+      setDeleting(null);
+    }
+  };
+
   const filtered = useMemo(() => {
     let result = [...projects];
     if (search) {
