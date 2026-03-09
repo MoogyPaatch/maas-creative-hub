@@ -357,11 +357,47 @@ const Projects = () => {
     try {
       await deleteProject(projectId);
       toast.success("Projet supprimé avec succès");
-      loadProjects(); // Recharger la liste
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(projectId);
+        return next;
+      });
+      loadProjects();
     } catch {
       toast.error("Impossible de supprimer le projet");
     } finally {
       setDeleting(null);
+    }
+  };
+
+  const toggleProjectSelection = (projectId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(projectId)) next.delete(projectId);
+      else next.add(projectId);
+      return next;
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+
+    if (!window.confirm(`Supprimer ${ids.length} projet${ids.length > 1 ? "s" : ""} ? Cette action est irréversible.`)) {
+      return;
+    }
+
+    setBulkDeleting(true);
+    try {
+      await Promise.all(ids.map((id) => deleteProject(id)));
+      toast.success(`${ids.length} projet${ids.length > 1 ? "s" : ""} supprimé${ids.length > 1 ? "s" : ""}`);
+      setSelectedIds(new Set());
+      setSelectMode(false);
+      loadProjects();
+    } catch {
+      toast.error("Impossible de supprimer tous les projets sélectionnés");
+    } finally {
+      setBulkDeleting(false);
     }
   };
 
