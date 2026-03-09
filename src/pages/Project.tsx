@@ -489,6 +489,46 @@ const ProjectPage = () => {
     );
   }
 
+  const handleDownloadDossier = useCallback(async () => {
+    if (!id) return;
+    try {
+      toast.info("Préparation du dossier PDF...");
+      const blob = await downloadDossierPDF(id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `dossier-${id}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Dossier téléchargé");
+    } catch {
+      toast.error("Impossible de télécharger le dossier");
+    }
+  }, [id]);
+
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [showShareDialog, setShowShareDialog] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const handleShare = useCallback(async () => {
+    if (!id) return;
+    try {
+      const result = await createShareLink(id);
+      setShareUrl(result.share_url);
+      setShowShareDialog(true);
+    } catch {
+      toast.error("Impossible de créer le lien de partage");
+    }
+  }, [id]);
+
+  const handleCopyShareUrl = useCallback(() => {
+    if (!shareUrl) return;
+    navigator.clipboard.writeText(shareUrl);
+    setCopied(true);
+    toast.success("Lien copié !");
+    setTimeout(() => setCopied(false), 2000);
+  }, [shareUrl]);
+
   const outputPanelProps = {
     artifacts,
     briefData,
@@ -506,6 +546,7 @@ const ProjectPage = () => {
     isClientView: isClient,
     isStreaming,
     isValidatingBrief,
+    projectId: id,
   };
 
   return (
