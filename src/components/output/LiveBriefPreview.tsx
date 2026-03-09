@@ -7,6 +7,7 @@ import {
   CLIENT_BRIEF_FIELD_DEFS,
   CLIENT_BRIEF_REQUIRED_FIELDS,
   CLIENT_BRIEF_ENRICHMENT_FIELDS,
+  EMPTY_BRIEF_DRAFT,
 } from "@/types";
 
 interface Props {
@@ -15,13 +16,8 @@ interface Props {
   onFieldChange?: (key: keyof ClientBriefDraft, value: string) => void;
   onValidate?: () => void;
   isStreaming?: boolean;
+  isValidating?: boolean;
 }
-
-const EMPTY_DRAFT: ClientBriefDraft = {
-  brand: null, product: null, objective: null, target: null, tone: null,
-  formats: null, promise: null, reason_to_believe: null,
-  creative_references: null, constraints: null, additional_context: null,
-};
 
 const LiveBriefPreview = ({
   briefDraft,
