@@ -442,23 +442,36 @@ const ProjectPage = () => {
     try {
       const conv = await getConversation(convId);
       setConversationId(conv.conversation_id);
-      const msgs = (conv.messages || []).map((m: any) => ({
+      const msgs: ChatMessage[] = (conv.messages || []).map((m: any) => ({
         role: m.role === "user" ? "user" : "agent",
         content: m.content || "",
         quickReplies: m.quick_replies?.map((qr: any) => ({ id: qr.id, label: qr.label })),
         metadata: m.metadata,
       }));
       setMessages(msgs);
-      setArtifacts(
-        (conv.artifacts || []).map((a: any) => ({ role: "agent", content: a.content || "", metadata: a.metadata }))
-      );
-      // Restore brief draft
+
+      // Restore artifacts from message history
+      const artifactTypes = [
+        "creative_brief", "dc_presentation", "dc_copy_result",
+        "ppm_presentation", "campaign_gallery", "validation_required", "delivery"
+      ];
+      const restoredArtifacts: ChatMessage[] = [];
       setClientBriefDraft({ ...EMPTY_BRIEF_DRAFT });
+
       for (const m of msgs) {
-        if (m.metadata?.type === "client_brief_draft" && m.metadata?.brief_draft) {
-          handleBriefDraftUpdate(m.metadata.brief_draft);
+        const meta = m.metadata;
+        if (!meta?.type) continue;
+        if (artifactTypes.includes(meta.type)) {
+          restoredArtifacts.push({ role: "agent", content: m.content || "", metadata: meta, timestamp: new Date() });
+        }
+        if (meta.type === "client_brief_draft" && meta.brief_draft) {
+          handleBriefDraftUpdate(meta.brief_draft);
         }
       }
+
+      const backendArtifacts = (conv.artifacts || []).map((a: any) => ({ role: "agent" as const, content: a.content || "", metadata: a.metadata }));
+      setArtifacts(restoredArtifacts.length > 0 ? restoredArtifacts : backendArtifacts);
+
       if (conv.brief_client_draft) handleBriefDraftUpdate(conv.brief_client_draft);
       setShowHistory(false);
     } catch {
