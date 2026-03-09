@@ -25,10 +25,11 @@ const LiveBriefPreview = ({
   onFieldChange,
   onValidate,
   isStreaming = false,
+  isValidating = false,
 }: Props) => {
   const [editingField, setEditingField] = useState<string | null>(null);
 
-  const draft = briefDraft || EMPTY_DRAFT;
+  const draft = briefDraft || EMPTY_BRIEF_DRAFT;
 
   const requiredFields = CLIENT_BRIEF_FIELD_DEFS.filter((f) => f.tier === "required");
   const quasiFields = CLIENT_BRIEF_FIELD_DEFS.filter((f) => f.tier === "quasi");
