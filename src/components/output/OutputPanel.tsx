@@ -34,6 +34,7 @@ interface Props {
   isClientView?: boolean;
   isStreaming?: boolean;
   isValidatingBrief?: boolean;
+  projectId?: string;
 }
 
 function briefToMarkdown(brief: BriefData): string {
