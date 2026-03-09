@@ -1,24 +1,27 @@
-import { useState } from "react";
-import { ImageOff } from "lucide-react";
+import { useState } from 'react';
+import { ImageOff } from 'lucide-react';
 
-interface Props {
+interface ImageWithFallbackProps {
   src: string;
   alt: string;
   className?: string;
+  fallbackClassName?: string;
 }
 
-const ImageWithFallback = ({ src, alt, className }: Props) => {
+export function ImageWithFallback({ src, alt, className, fallbackClassName }: ImageWithFallbackProps) {
   const [error, setError] = useState(false);
-
-  if (error) {
+  
+  if (error || !src) {
     return (
-      <div className={`flex flex-col items-center justify-center bg-muted/80 ${className || ""}`}>
-        <ImageOff className="mb-2 h-8 w-8 text-muted-foreground/50" />
-        <span className="text-xs text-muted-foreground">Visuel en cours de génération...</span>
+      <div className={fallbackClassName || className || 'w-full h-48 bg-muted flex items-center justify-center rounded-lg'}>
+        <div className="text-center text-muted-foreground">
+          <ImageOff className="h-8 w-8 mx-auto mb-2" />
+          <p className="text-sm">Image non disponible</p>
+        </div>
       </div>
     );
   }
-
+  
   return (
     <img
       src={src}
@@ -27,6 +30,6 @@ const ImageWithFallback = ({ src, alt, className }: Props) => {
       onError={() => setError(true)}
     />
   );
-};
+}
 
 export default ImageWithFallback;
