@@ -484,14 +484,6 @@ const ProjectPage = () => {
 
   const hasPendingValidation = projectStatus?.pending_validations?.some((v) => v.status === "pending");
 
-  if (loading) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-background">
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
   const handleDownloadDossier = useCallback(async () => {
     if (!id) return;
     try {
@@ -508,6 +500,33 @@ const ProjectPage = () => {
       toast.error("Impossible de télécharger le dossier");
     }
   }, [id]);
+
+  const handleShare = useCallback(async () => {
+    if (!id) return;
+    try {
+      const result = await createShareLink(id);
+      setShareUrl(result.share_url);
+      setShowShareDialog(true);
+    } catch {
+      toast.error("Impossible de créer le lien de partage");
+    }
+  }, [id]);
+
+  const handleCopyShareUrl = useCallback(() => {
+    if (!shareUrl) return;
+    navigator.clipboard.writeText(shareUrl);
+    setCopied(true);
+    toast.success("Lien copié !");
+    setTimeout(() => setCopied(false), 2000);
+  }, [shareUrl]);
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   const handleShare = useCallback(async () => {
     if (!id) return;
