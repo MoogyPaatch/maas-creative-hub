@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Loader2 } from "lucide-react";
 import logoWhite from "@/assets/logo-marcel-white.png";
+import logoBlack from "@/assets/logo-marcel-black.png";
 
 const taglines = [
   "Make things that change things.",
