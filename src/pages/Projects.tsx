@@ -1,17 +1,16 @@
 import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { getProjects, createConversation, deleteProject } from "@/lib/api";
+import { getProjects, createConversation } from "@/lib/api";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import {
   Plus, Clock, CheckCircle2, AlertCircle, Loader2, Search, Filter,
-  LayoutGrid, Columns3, AlertTriangle, ArrowRight, LogOut, Bell, ChevronRight, Trash2, X,
+  LayoutGrid, Columns3, AlertTriangle, ArrowRight, LogOut, Bell, ChevronRight,
 } from "lucide-react";
 import { WORKFLOW_STEPS, CLIENT_PHASES, getClientPhaseIndex, getClientPhaseLabel } from "@/types";
 import type { Project } from "@/types";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Checkbox } from "@/components/ui/checkbox";
 import logoBlack from "@/assets/logo-marcel-black.png";
 import logoWhite from "@/assets/logo-marcel-white.png";
 
@@ -320,10 +319,6 @@ const Projects = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
-  const [deleting, setDeleting] = useState<string | null>(null);
-  const [bulkDeleting, setBulkDeleting] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [selectMode, setSelectMode] = useState(false);
   const [search, setSearch] = useState("");
   const [filterPhase, setFilterPhase] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<SortKey>("date");
@@ -350,59 +345,6 @@ const Projects = () => {
     } catch {
       toast.error("Impossible de créer le projet");
       setCreating(false);
-    }
-  };
-
-  const handleDelete = async (projectId: string, projectName: string) => {
-    if (!window.confirm(`Êtes-vous sûr de vouloir supprimer le projet "${projectName}" ? Cette action est irréversible.`)) {
-      return;
-    }
-
-    setDeleting(projectId);
-    try {
-      await deleteProject(projectId);
-      toast.success("Projet supprimé avec succès");
-      setSelectedIds((prev) => {
-        const next = new Set(prev);
-        next.delete(projectId);
-        return next;
-      });
-      loadProjects();
-    } catch {
-      toast.error("Impossible de supprimer le projet");
-    } finally {
-      setDeleting(null);
-    }
-  };
-
-  const toggleProjectSelection = (projectId: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(projectId)) next.delete(projectId);
-      else next.add(projectId);
-      return next;
-    });
-  };
-
-  const handleBulkDelete = async () => {
-    const ids = Array.from(selectedIds);
-    if (ids.length === 0) return;
-
-    if (!window.confirm(`Supprimer ${ids.length} projet${ids.length > 1 ? "s" : ""} ? Cette action est irréversible.`)) {
-      return;
-    }
-
-    setBulkDeleting(true);
-    try {
-      await Promise.all(ids.map((id) => deleteProject(id)));
-      toast.success(`${ids.length} projet${ids.length > 1 ? "s" : ""} supprimé${ids.length > 1 ? "s" : ""}`);
-      setSelectedIds(new Set());
-      setSelectMode(false);
-      loadProjects();
-    } catch {
-      toast.error("Impossible de supprimer tous les projets sélectionnés");
-    } finally {
-      setBulkDeleting(false);
     }
   };
 
@@ -480,7 +422,7 @@ const Projects = () => {
     );
   }
 
-  // ── Agency view (unchanged) ─────────────────────────────────────────
+  // ── Agency view ─────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border sticky top-0 z-30 bg-background/95 backdrop-blur-sm">
@@ -558,42 +500,6 @@ const Projects = () => {
               <option value="phase">Par phase</option>
             </select>
 
-            {!selectMode ? (
-              <button
-                onClick={() => setSelectMode(true)}
-                className="flex h-10 items-center gap-2 border border-border px-3 text-xs text-muted-foreground hover:text-foreground hover:border-foreground transition-colors"
-              >
-                Sélectionner
-              </button>
-            ) : (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">
-                  {selectedIds.size} sélectionné{selectedIds.size !== 1 ? "s" : ""}
-                </span>
-                <button
-                  onClick={handleBulkDelete}
-                  disabled={selectedIds.size === 0 || bulkDeleting}
-                  className="flex h-10 items-center gap-2 bg-destructive px-3 text-xs font-bold text-destructive-foreground hover:bg-destructive/90 transition-colors disabled:opacity-50"
-                >
-                  {bulkDeleting ? (
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                  ) : (
-                    <Trash2 className="h-3 w-3" />
-                  )}
-                  Supprimer
-                </button>
-                <button
-                  onClick={() => {
-                    setSelectMode(false);
-                    setSelectedIds(new Set());
-                  }}
-                  className="flex h-10 w-10 items-center justify-center border border-border text-muted-foreground hover:text-foreground hover:border-foreground transition-colors"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            )}
-
             <div className="flex border border-border overflow-hidden">
               <button
                 onClick={() => setViewMode("grid")}
@@ -657,60 +563,28 @@ const Projects = () => {
                         <motion.div
                           key={p.id}
                           layout
-                          className="group border border-border p-4 transition-all hover:border-foreground"
+                          onClick={() => navigate(`/project/${p.id}`)}
+                          className="group border border-border p-4 cursor-pointer transition-all hover:border-foreground"
                         >
                           <div className="flex items-start justify-between mb-2">
-                            <h4 
-                              onClick={() => !selectMode && navigate(`/project/${p.id}`)}
-                              className={`text-sm font-bold text-foreground truncate flex-1 ${!selectMode ? "cursor-pointer hover:text-accent" : ""} transition-colors`}
-                            >
+                            <h4 className="text-sm font-bold text-foreground truncate flex-1 hover:text-accent transition-colors">
                               {p.client_name || "Nouvelle campagne"}
                             </h4>
-                            <div className="flex items-center gap-2 ml-2">
-                              {selectMode && (
-                                <Checkbox
-                                  checked={selectedIds.has(p.id)}
-                                  onCheckedChange={() => toggleProjectSelection(p.id)}
-                                />
-                              )}
-                              {!selectMode && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDelete(p.id, p.client_name || "Nouvelle campagne");
-                                  }}
-                                  disabled={deleting === p.id}
-                                  className="p-1 text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
-                                  title="Supprimer le projet"
-                                >
-                                  {deleting === p.id ? (
-                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                  ) : (
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  )}
-                                </button>
-                              )}
-                            </div>
                           </div>
-                          <div 
-                            onClick={() => !selectMode && navigate(`/project/${p.id}`)}
-                            className={selectMode ? "" : "cursor-pointer"}
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className="text-[10px] text-muted-foreground font-medium">
-                                {new Date(p.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
-                              </span>
-                              <span className={`flex items-center gap-1 text-[10px] font-bold ${sc.color}`}>
-                                {sc.icon}
-                              </span>
-                            </div>
-                            {p.pending_validation && (
-                              <div className="mt-3 flex items-center gap-1.5 text-[10px] font-bold text-accent">
-                                <AlertTriangle className="h-3 w-3" />
-                                Action requise
-                              </div>
-                            )}
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] text-muted-foreground font-medium">
+                              {new Date(p.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
+                            </span>
+                            <span className={`flex items-center gap-1 text-[10px] font-bold ${sc.color}`}>
+                              {sc.icon}
+                            </span>
                           </div>
+                          {p.pending_validation && (
+                            <div className="mt-3 flex items-center gap-1.5 text-[10px] font-bold text-accent">
+                              <AlertTriangle className="h-3 w-3" />
+                              Action requise
+                            </div>
+                          )}
                         </motion.div>
                       );
                     })}
@@ -736,7 +610,8 @@ const Projects = () => {
                   initial={{ opacity: 0, y: 16 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.04 }}
-                  className="group border border-border overflow-hidden transition-all duration-300 hover:border-foreground"
+                  onClick={() => navigate(`/project/${p.id}`)}
+                  className="group border border-border overflow-hidden cursor-pointer transition-all duration-300 hover:border-foreground"
                 >
                   <div className="h-1 w-full bg-secondary">
                     <motion.div
@@ -746,22 +621,12 @@ const Projects = () => {
                       className="h-full bg-foreground"
                     />
                   </div>
-                  <div 
-                    onClick={() => !selectMode && navigate(`/project/${p.id}`)}
-                    className={`p-6 ${selectMode ? "cursor-default" : "cursor-pointer"}`}
-                  >
+                  <div className="p-6">
                     <div className="flex items-center justify-between mb-4">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                         {getPhaseLabel(p.supervisor_phase)}
                       </span>
                       <div className="flex items-center gap-2">
-                        {selectMode && (
-                          <Checkbox
-                            checked={selectedIds.has(p.id)}
-                            onCheckedChange={() => toggleProjectSelection(p.id)}
-                            className="mr-2"
-                          />
-                        )}
                         {p.pending_validation && (
                           <span className="flex items-center gap-1 text-[10px] font-bold text-accent">
                             <AlertTriangle className="h-3 w-3" />
@@ -771,23 +636,6 @@ const Projects = () => {
                         <span className={`flex items-center gap-1 text-[10px] font-bold ${sc.color}`}>
                           {sc.icon} {sc.label}
                         </span>
-                        {!selectMode && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDelete(p.id, name);
-                            }}
-                            disabled={deleting === p.id}
-                            className="ml-2 p-1 text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50 opacity-0 group-hover:opacity-100"
-                            title="Supprimer le projet"
-                          >
-                            {deleting === p.id ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                            ) : (
-                              <Trash2 className="h-3 w-3" />
-                            )}
-                          </button>
-                        )}
                       </div>
                     </div>
                     <h3 className="text-lg font-bold text-foreground group-hover:text-accent transition-colors">
