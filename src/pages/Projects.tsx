@@ -314,6 +314,7 @@ const Projects = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [deleting, setDeleting] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [filterPhase, setFilterPhase] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<SortKey>("date");
@@ -322,11 +323,15 @@ const Projects = () => {
   const isAgency = user?.role === "agency" || user?.role === "admin";
 
   useEffect(() => {
+    loadProjects();
+  }, []);
+
+  const loadProjects = () => {
     getProjects()
       .then((data) => setProjects(data))
       .catch(() => toast.error("Impossible de charger les projets"))
       .finally(() => setLoading(false));
-  }, []);
+  };
 
   const handleNew = async () => {
     setCreating(true);
