@@ -158,6 +158,9 @@ const ProjectPage = () => {
             setBriefId(brief.id);
           }
         }).catch(() => {});
+        getBrandAssets(id).then((assets) => {
+          setBrandAssets(assets);
+        }).catch(() => {});
         getPPM(id).then((ppmData) => {
           if (ppmData) {
             const ppmMetadata = {
