@@ -644,8 +644,7 @@ const Projects = () => {
                   initial={{ opacity: 0, y: 16 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.04 }}
-                  onClick={() => navigate(`/project/${p.id}`)}
-                  className="group cursor-pointer border border-border overflow-hidden transition-all duration-300 hover:border-foreground"
+                  className="group border border-border overflow-hidden transition-all duration-300 hover:border-foreground"
                 >
                   <div className="h-1 w-full bg-secondary">
                     <motion.div
@@ -655,7 +654,10 @@ const Projects = () => {
                       className="h-full bg-foreground"
                     />
                   </div>
-                  <div className="p-6">
+                  <div 
+                    onClick={() => navigate(`/project/${p.id}`)}
+                    className="p-6 cursor-pointer"
+                  >
                     <div className="flex items-center justify-between mb-4">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                         {getPhaseLabel(p.supervisor_phase)}
@@ -670,6 +672,21 @@ const Projects = () => {
                         <span className={`flex items-center gap-1 text-[10px] font-bold ${sc.color}`}>
                           {sc.icon} {sc.label}
                         </span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(p.id, name);
+                          }}
+                          disabled={deleting === p.id}
+                          className="ml-2 p-1 text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50 opacity-0 group-hover:opacity-100"
+                          title="Supprimer le projet"
+                        >
+                          {deleting === p.id ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3 w-3" />
+                          )}
+                        </button>
                       </div>
                     </div>
                     <h3 className="text-lg font-bold text-foreground group-hover:text-accent transition-colors">
