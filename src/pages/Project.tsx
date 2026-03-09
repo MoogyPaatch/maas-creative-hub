@@ -86,18 +86,27 @@ const ProjectPage = () => {
 
   // Validate brief
   const handleValidateClientBrief = useCallback(async () => {
-    if (!conversationId) return;
+    if (!conversationId || isValidatingBrief) return;
+    setIsValidatingBrief(true);
     try {
-      const body: Record<string, string> = {};
-      for (const [k, v] of Object.entries(clientBriefDraft)) {
-        if (v) body[k] = v;
+      // Filter out null, undefined or empty fields
+      const cleanBrief = Object.fromEntries(
+        Object.entries(clientBriefDraft).filter(([_, v]) => v != null && v !== "")
+      );
+      
+      if (Object.keys(cleanBrief).length === 0) {
+        toast.error("Aucun champ rempli à valider");
+        return;
       }
-      const stream = await validateClientBrief(conversationId, body);
+
+      const stream = await validateClientBrief(conversationId, cleanBrief);
       if (stream) await handleSSEStream(stream);
     } catch {
       toast.error("Erreur lors de la validation du brief");
+    } finally {
+      setIsValidatingBrief(false);
     }
-  }, [conversationId, clientBriefDraft]);
+  }, [conversationId, clientBriefDraft, isValidatingBrief]);
 
   const loadConversationsList = useCallback(async () => {
     if (!id) return;
