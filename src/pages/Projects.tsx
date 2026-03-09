@@ -575,26 +575,50 @@ const Projects = () => {
                         <motion.div
                           key={p.id}
                           layout
-                          onClick={() => navigate(`/project/${p.id}`)}
-                          className="group cursor-pointer border border-border p-4 transition-all hover:border-foreground"
+                          className="group border border-border p-4 transition-all hover:border-foreground"
                         >
-                          <h4 className="text-sm font-bold text-foreground truncate">
-                            {p.client_name || "Nouvelle campagne"}
-                          </h4>
-                          <div className="mt-3 flex items-center justify-between">
-                            <span className="text-[10px] text-muted-foreground font-medium">
-                              {new Date(p.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
-                            </span>
-                            <span className={`flex items-center gap-1 text-[10px] font-bold ${sc.color}`}>
-                              {sc.icon}
-                            </span>
+                          <div className="flex items-start justify-between mb-2">
+                            <h4 
+                              onClick={() => navigate(`/project/${p.id}`)}
+                              className="text-sm font-bold text-foreground truncate cursor-pointer hover:text-accent transition-colors flex-1"
+                            >
+                              {p.client_name || "Nouvelle campagne"}
+                            </h4>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDelete(p.id, p.client_name || "Nouvelle campagne");
+                              }}
+                              disabled={deleting === p.id}
+                              className="ml-2 p-1 text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
+                              title="Supprimer le projet"
+                            >
+                              {deleting === p.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-3.5 w-3.5" />
+                              )}
+                            </button>
                           </div>
-                          {p.pending_validation && (
-                            <div className="mt-3 flex items-center gap-1.5 text-[10px] font-bold text-accent">
-                              <AlertTriangle className="h-3 w-3" />
-                              Action requise
+                          <div 
+                            onClick={() => navigate(`/project/${p.id}`)}
+                            className="cursor-pointer"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] text-muted-foreground font-medium">
+                                {new Date(p.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
+                              </span>
+                              <span className={`flex items-center gap-1 text-[10px] font-bold ${sc.color}`}>
+                                {sc.icon}
+                              </span>
                             </div>
-                          )}
+                            {p.pending_validation && (
+                              <div className="mt-3 flex items-center gap-1.5 text-[10px] font-bold text-accent">
+                                <AlertTriangle className="h-3 w-3" />
+                                Action requise
+                              </div>
+                            )}
+                          </div>
                         </motion.div>
                       );
                     })}
