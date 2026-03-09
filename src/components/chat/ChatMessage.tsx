@@ -46,8 +46,9 @@ const ChatMessageBubble = ({ message, showQuickReplies, onQuickReply }: Props) =
               ? "bg-chat-user text-chat-user-foreground rounded-br-md shadow-sm"
               : "bg-chat-agent text-chat-agent-foreground rounded-bl-md hover:shadow-md"
           }`}
+          style={{ color: isUser ? 'hsl(var(--chat-user-foreground))' : 'hsl(var(--chat-agent-foreground))' }}
         >
-          <div className="prose prose-sm max-w-none dark:prose-invert prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-li:my-0.5 prose-p:text-inherit prose-headings:text-inherit prose-strong:text-inherit prose-li:text-inherit prose-a:text-primary">
+          <div className="prose prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-li:my-0.5 [&_*]:!text-inherit [&_a]:!text-primary">
             <ReactMarkdown>{message.content}</ReactMarkdown>
           </div>
         </div>
