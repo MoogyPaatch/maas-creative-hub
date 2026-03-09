@@ -656,26 +656,36 @@ const Projects = () => {
                         >
                           <div className="flex items-start justify-between mb-2">
                             <h4 
-                              onClick={() => navigate(`/project/${p.id}`)}
-                              className="text-sm font-bold text-foreground truncate cursor-pointer hover:text-accent transition-colors flex-1"
+                              onClick={() => !selectMode && navigate(`/project/${p.id}`)}
+                              className={`text-sm font-bold text-foreground truncate flex-1 ${!selectMode ? "cursor-pointer hover:text-accent" : ""} transition-colors`}
                             >
                               {p.client_name || "Nouvelle campagne"}
                             </h4>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDelete(p.id, p.client_name || "Nouvelle campagne");
-                              }}
-                              disabled={deleting === p.id}
-                              className="ml-2 p-1 text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
-                              title="Supprimer le projet"
-                            >
-                              {deleting === p.id ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              ) : (
-                                <Trash2 className="h-3.5 w-3.5" />
+                            <div className="flex items-center gap-2 ml-2">
+                              {selectMode && (
+                                <Checkbox
+                                  checked={selectedIds.has(p.id)}
+                                  onCheckedChange={() => toggleProjectSelection(p.id)}
+                                />
                               )}
-                            </button>
+                              {!selectMode && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDelete(p.id, p.client_name || "Nouvelle campagne");
+                                  }}
+                                  disabled={deleting === p.id}
+                                  className="p-1 text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
+                                  title="Supprimer le projet"
+                                >
+                                  {deleting === p.id ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  ) : (
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  )}
+                                </button>
+                              )}
+                            </div>
                           </div>
                           <div 
                             onClick={() => navigate(`/project/${p.id}`)}
