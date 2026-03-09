@@ -33,6 +33,7 @@ interface Props {
   currentStep?: string;
   isClientView?: boolean;
   isStreaming?: boolean;
+  isValidatingBrief?: boolean;
 }
 
 function briefToMarkdown(brief: BriefData): string {
@@ -69,7 +70,7 @@ const OutputPanel = ({
   clientBriefDraft, changedBriefFields, onClientBriefFieldChange, onValidateClientBrief,
   onSelectPiste, onApprove, onReject,
   brandAssets = [], onBrandAssetsChange, highlightAssetCategories,
-  showAssetsTab = true, onBriefChange, currentStep, isClientView = false, isStreaming = false,
+  showAssetsTab = true, onBriefChange, currentStep, isClientView = false, isStreaming = false, isValidatingBrief = false,
 }: Props) => {
   const agencyOnlyTypes = new Set(["creative_brief", "dc_copy_result"]);
 
@@ -190,6 +191,7 @@ const OutputPanel = ({
                   onFieldChange={onClientBriefFieldChange}
                   onValidate={onValidateClientBrief}
                   isStreaming={isStreaming}
+                  isValidating={isValidatingBrief}
                 />
               </motion.div>
             )}

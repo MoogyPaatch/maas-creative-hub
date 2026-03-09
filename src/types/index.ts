@@ -93,6 +93,22 @@ export const CLIENT_BRIEF_FIELD_DEFS: ClientBriefFieldDef[] = [
   { key: "additional_context", label: "Contexte additionnel", placeholder: "Tout ce qui est important et ne rentre pas dans les cases", tier: "enrichment" },
 ];
 
+// ── Empty Brief Draft ─────────────────────────────────────────────────────
+
+export const EMPTY_BRIEF_DRAFT: ClientBriefDraft = {
+  brand: null,
+  product: null,
+  objective: null,
+  target: null,
+  tone: null,
+  formats: null,
+  promise: null,
+  reason_to_believe: null,
+  creative_references: null,
+  constraints: null,
+  additional_context: null,
+};
+
 // ── Legacy BriefData (kept for creative brief compatibility) ─────────────
 
 export interface BriefData {
@@ -110,7 +126,7 @@ export interface BriefData {
 
 // ── Message Metadata ─────────────────────────────────────────────────────
 
-export interface MessageMetadata {
+export interface ChatMessageMetadata {
   type: string;
   content?: string;
   slides_url?: string;
@@ -143,7 +159,14 @@ export interface MessageMetadata {
   // status_update fields
   status?: string;
   phase_label?: string;
+  // action_required fields
+  action?: "validate_brief" | "select_piste" | "confirm";
+  options?: string[];
+  validation_data?: any;
 }
+
+// Legacy alias for compatibility
+export interface MessageMetadata extends ChatMessageMetadata {}
 
 // ── DC Piste (enriched) ──────────────────────────────────────────────────
 
@@ -234,7 +257,7 @@ export interface ChatMessage {
   role: "user" | "agent" | "system";
   content: string;
   quickReplies?: QuickReply[];
-  metadata?: MessageMetadata;
+  metadata?: ChatMessageMetadata;
   timestamp?: Date;
 }
 

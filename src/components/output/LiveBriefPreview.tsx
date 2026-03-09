@@ -7,6 +7,7 @@ import {
   CLIENT_BRIEF_FIELD_DEFS,
   CLIENT_BRIEF_REQUIRED_FIELDS,
   CLIENT_BRIEF_ENRICHMENT_FIELDS,
+  EMPTY_BRIEF_DRAFT,
 } from "@/types";
 
 interface Props {
@@ -15,13 +16,8 @@ interface Props {
   onFieldChange?: (key: keyof ClientBriefDraft, value: string) => void;
   onValidate?: () => void;
   isStreaming?: boolean;
+  isValidating?: boolean;
 }
-
-const EMPTY_DRAFT: ClientBriefDraft = {
-  brand: null, product: null, objective: null, target: null, tone: null,
-  formats: null, promise: null, reason_to_believe: null,
-  creative_references: null, constraints: null, additional_context: null,
-};
 
 const LiveBriefPreview = ({
   briefDraft,
@@ -29,10 +25,11 @@ const LiveBriefPreview = ({
   onFieldChange,
   onValidate,
   isStreaming = false,
+  isValidating = false,
 }: Props) => {
   const [editingField, setEditingField] = useState<string | null>(null);
 
-  const draft = briefDraft || EMPTY_DRAFT;
+  const draft = briefDraft || EMPTY_BRIEF_DRAFT;
 
   const requiredFields = CLIENT_BRIEF_FIELD_DEFS.filter((f) => f.tier === "required");
   const quasiFields = CLIENT_BRIEF_FIELD_DEFS.filter((f) => f.tier === "quasi");
@@ -211,15 +208,19 @@ const LiveBriefPreview = ({
           <div className="mt-8 flex justify-center">
             <button
               onClick={onValidate}
-              disabled={!canValidate || isStreaming}
+              disabled={!canValidate || isStreaming || isValidating}
               className={`flex items-center gap-2 px-8 py-3 text-sm font-bold uppercase tracking-wider transition-all ${
-                canValidate && !isStreaming
+                canValidate && !isStreaming && !isValidating
                   ? "bg-foreground text-background hover:opacity-90"
                   : "bg-muted text-muted-foreground cursor-not-allowed"
               }`}
             >
-              <Send className="h-4 w-4" />
-              Valider le Brief
+              {isValidating ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+              {isValidating ? "Validation..." : "Valider le Brief"}
             </button>
             {!canValidate && (
               <p className="mt-2 text-[10px] text-muted-foreground text-center absolute -bottom-6">

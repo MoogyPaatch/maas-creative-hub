@@ -5,7 +5,8 @@ export async function parseSSEStream(
   onMessage: (msg: ChatMessage) => void,
   onDone?: () => void,
   onThinking?: (label: string) => void,
-  onBriefDraft?: (draft: Partial<ClientBriefDraft>) => void
+  onBriefDraft?: (draft: Partial<ClientBriefDraft>) => void,
+  onActionRequired?: (action: string, options?: string[], validationData?: any) => void
 ): Promise<void> {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
@@ -43,6 +44,30 @@ export async function parseSSEStream(
               onBriefDraft?.(data.metadata.brief_draft);
               // Also emit as a regular message if there's content
               if (!data.content) continue;
+            }
+
+            // action_required → handle user choices/validation
+            if (data.metadata?.type === "action_required") {
+              onActionRequired?.(
+                data.metadata.action,
+                data.metadata.options,
+                data.metadata.validation_data
+              );
+              // Convert options to quick replies if available
+              const quickReplies: QuickReply[] = data.metadata.options?.map((option: string, idx: number) => ({
+                id: `action_${idx}`,
+                label: option
+              })) || [];
+              
+              onMessage({
+                role: "agent",
+                content: data.content || data.metadata.message || "",
+                quickReplies: quickReplies.length > 0 ? quickReplies : undefined,
+                metadata: data.metadata,
+                timestamp: new Date(),
+              });
+              messageCount++;
+              continue;
             }
 
             if (data.role !== "thinking") {

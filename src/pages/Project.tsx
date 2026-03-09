@@ -23,15 +23,10 @@ import WorkflowStepper from "@/components/layout/WorkflowStepper";
 import ConversationHistory from "@/components/chat/ConversationHistory";
 import { AnimatePresence } from "framer-motion";
 import type { ChatMessage, ProjectStatus, ConversationSummary, ClientBriefDraft } from "@/types";
+import { EMPTY_BRIEF_DRAFT } from "@/types";
 import { ArrowLeft, Loader2, History, Shield } from "lucide-react";
 import logoBlack from "@/assets/logo-marcel-black.png";
 import logoWhite from "@/assets/logo-marcel-white.png";
-
-const EMPTY_BRIEF_DRAFT: ClientBriefDraft = {
-  brand: null, product: null, objective: null, target: null, tone: null,
-  formats: null, promise: null, reason_to_believe: null,
-  creative_references: null, constraints: null, additional_context: null,
-};
 
 const ProjectPage = () => {
   const { id } = useParams<{ id: string }>();
@@ -52,6 +47,7 @@ const ProjectPage = () => {
   const [briefData, setBriefData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [mobileTab, setMobileTab] = useState<"chat" | "output">("chat");
+  const [isValidatingBrief, setIsValidatingBrief] = useState(false);
 
   // Client brief draft state (SSE-driven)
   const [clientBriefDraft, setClientBriefDraft] = useState<ClientBriefDraft>({ ...EMPTY_BRIEF_DRAFT });
@@ -90,18 +86,27 @@ const ProjectPage = () => {
 
   // Validate brief
   const handleValidateClientBrief = useCallback(async () => {
-    if (!conversationId) return;
+    if (!conversationId || isValidatingBrief) return;
+    setIsValidatingBrief(true);
     try {
-      const body: Record<string, string> = {};
-      for (const [k, v] of Object.entries(clientBriefDraft)) {
-        if (v) body[k] = v;
+      // Filter out null, undefined or empty fields
+      const cleanBrief = Object.fromEntries(
+        Object.entries(clientBriefDraft).filter(([_, v]) => v != null && v !== "")
+      );
+      
+      if (Object.keys(cleanBrief).length === 0) {
+        toast.error("Aucun champ rempli à valider");
+        return;
       }
-      const stream = await validateClientBrief(conversationId, body);
+
+      const stream = await validateClientBrief(conversationId, cleanBrief);
       if (stream) await handleSSEStream(stream);
     } catch {
       toast.error("Erreur lors de la validation du brief");
+    } finally {
+      setIsValidatingBrief(false);
     }
-  }, [conversationId, clientBriefDraft]);
+  }, [conversationId, clientBriefDraft, isValidatingBrief]);
 
   const loadConversationsList = useCallback(async () => {
     if (!id) return;
@@ -250,7 +255,11 @@ const ProjectPage = () => {
         }
       },
       (label) => setThinking(label),
-      handleBriefDraftUpdate
+      handleBriefDraftUpdate,
+      (action, options, validationData) => {
+        // Handle action_required events - for now just log
+        console.log("Action required:", { action, options, validationData });
+      }
     );
   }, [id, handleBriefDraftUpdate]);
 
@@ -391,6 +400,7 @@ const ProjectPage = () => {
     currentStep: projectStatus?.current_step || "commercial",
     isClientView: isClient,
     isStreaming,
+    isValidatingBrief,
   };
 
   return (
