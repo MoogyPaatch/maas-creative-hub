@@ -23,15 +23,10 @@ import WorkflowStepper from "@/components/layout/WorkflowStepper";
 import ConversationHistory from "@/components/chat/ConversationHistory";
 import { AnimatePresence } from "framer-motion";
 import type { ChatMessage, ProjectStatus, ConversationSummary, ClientBriefDraft } from "@/types";
+import { EMPTY_BRIEF_DRAFT } from "@/types";
 import { ArrowLeft, Loader2, History, Shield } from "lucide-react";
 import logoBlack from "@/assets/logo-marcel-black.png";
 import logoWhite from "@/assets/logo-marcel-white.png";
-
-const EMPTY_BRIEF_DRAFT: ClientBriefDraft = {
-  brand: null, product: null, objective: null, target: null, tone: null,
-  formats: null, promise: null, reason_to_believe: null,
-  creative_references: null, constraints: null, additional_context: null,
-};
 
 const ProjectPage = () => {
   const { id } = useParams<{ id: string }>();
