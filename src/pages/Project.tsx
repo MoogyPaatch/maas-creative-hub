@@ -29,7 +29,7 @@ import ConversationHistory from "@/components/chat/ConversationHistory";
 import { AnimatePresence } from "framer-motion";
 import type { ChatMessage, ProjectStatus, ConversationSummary, ClientBriefDraft, BrandAsset } from "@/types";
 import { EMPTY_BRIEF_DRAFT, CLIENT_BRIEF_REQUIRED_FIELDS } from "@/types";
-import { ArrowLeft, Loader2, History, Shield } from "lucide-react";
+import { ArrowLeft, Loader2, History, Shield, Download, Share2, Copy, Check } from "lucide-react";
 import logoBlack from "@/assets/logo-marcel-black.png";
 import logoWhite from "@/assets/logo-marcel-white.png";
 
