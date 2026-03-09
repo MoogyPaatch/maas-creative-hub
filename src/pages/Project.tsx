@@ -49,6 +49,7 @@ const ProjectPage = () => {
   const [projectStatus, setProjectStatus] = useState<ProjectStatus | null>(null);
   const [briefData, setBriefData] = useState<any>(null);
   const [briefId, setBriefId] = useState<string | null>(null);
+  const [brandAssets, setBrandAssets] = useState<BrandAsset[]>([]);
   const [loading, setLoading] = useState(true);
   const [mobileTab, setMobileTab] = useState<"chat" | "output">("chat");
   const [isValidatingBrief, setIsValidatingBrief] = useState(false);
