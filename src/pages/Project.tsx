@@ -462,6 +462,8 @@ const ProjectPage = () => {
     onSelectPiste: handleSelectPiste,
     onApprove: handleApprove,
     onReject: handleReject,
+    brandAssets,
+    onBrandAssetsChange: setBrandAssets,
     currentStep: projectStatus?.current_step || "commercial",
     isClientView: isClient,
     isStreaming,
