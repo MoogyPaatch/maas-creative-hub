@@ -47,6 +47,7 @@ const ProjectPage = () => {
   const [briefData, setBriefData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [mobileTab, setMobileTab] = useState<"chat" | "output">("chat");
+  const [isValidatingBrief, setIsValidatingBrief] = useState(false);
 
   // Client brief draft state (SSE-driven)
   const [clientBriefDraft, setClientBriefDraft] = useState<ClientBriefDraft>({ ...EMPTY_BRIEF_DRAFT });
