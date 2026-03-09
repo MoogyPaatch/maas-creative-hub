@@ -68,7 +68,7 @@ const Login = () => {
           <div className="h-1 w-16 bg-accent" />
         </div>
 
-        <p className="text-sm text-primary-foreground/40 font-medium tracking-widest uppercase">
+        <p className="text-sm text-muted-foreground font-medium tracking-widest uppercase">
           Marcel as a Service
         </p>
       </div>
