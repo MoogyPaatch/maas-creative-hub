@@ -398,7 +398,8 @@ const ProjectPage = () => {
       }
       try {
         toast.info(`Upload de ${file.name}...`);
-        await uploadFile(id, file);
+        const uploadedAsset = await uploadFile(id, file);
+        setBrandAssets((prev) => [...prev, mapBrandAsset(uploadedAsset)]);
         setMessages((prev) => [...prev, { role: "user", content: `📎 ${file.name}`, timestamp: new Date() }]);
         toast.success(`${file.name} envoyé`);
         const ext = file.name.split(".").pop()?.toLowerCase();
