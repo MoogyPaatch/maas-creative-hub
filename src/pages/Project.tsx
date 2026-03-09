@@ -157,9 +157,24 @@ const ProjectPage = () => {
         }).catch(() => {});
         getPPM(id).then((ppmData) => {
           if (ppmData) {
+            const ppmMetadata = {
+              type: "ppm_presentation" as const,
+              summary: `PPM – ${ppmData.status || "en cours"}`,
+              storyboard: ppmData.frames || [],
+              storyboard_count: (ppmData.frames || []).length,
+              casting: ppmData.casting_direction || [],
+              casting_count: (ppmData.casting_direction || []).length,
+              settings: ppmData.settings_direction || [],
+              settings_count: (ppmData.settings_direction || []).length,
+              mockups: ppmData.finalized_mockups || [],
+              mockup_count: (ppmData.finalized_mockups || []).length,
+              production_notes: ppmData.production_notes || {},
+              slides_url: null,
+              pptx_url: null,
+            };
             setArtifacts((prev) => {
               if (prev.some((a) => a.metadata?.type === "ppm_presentation")) return prev;
-              return [...prev, { role: "agent", content: "", metadata: { type: "ppm_presentation", ...ppmData } }];
+              return [...prev, { role: "agent", content: "", metadata: ppmMetadata }];
             });
           }
         }).catch(() => {});
