@@ -208,17 +208,40 @@ const ProjectPage = () => {
         }));
         setMessages(existingMessages);
 
-        // Restore brief draft from conversation messages
+        // Restore artifacts and brief draft from message history (BUG 3 fix)
+        const artifactTypes = [
+          "creative_brief", "dc_presentation", "dc_copy_result",
+          "ppm_presentation", "campaign_gallery", "validation_required", "delivery"
+        ];
+        const restoredArtifacts: ChatMessage[] = [];
+        let restoredBrief: Partial<ClientBriefDraft> = {};
+
         for (const m of existingMessages) {
-          if (m.metadata?.type === "client_brief_draft" && m.metadata?.brief_draft) {
-            handleBriefDraftUpdate(m.metadata.brief_draft);
+          const meta = m.metadata;
+          if (!meta?.type) continue;
+          if (artifactTypes.includes(meta.type)) {
+            restoredArtifacts.push({
+              role: "agent",
+              content: m.content || "",
+              metadata: meta,
+              timestamp: m.timestamp ? new Date(m.timestamp as any) : new Date(),
+            });
+          }
+          if (meta.type === "client_brief_draft" && meta.brief_draft) {
+            restoredBrief = { ...restoredBrief, ...meta.brief_draft };
           }
         }
 
-        const existingArtifacts: ChatMessage[] = (conv.artifacts || []).map((a: any) => ({
-          role: "agent", content: a.content || "", metadata: a.metadata,
+        // Merge with any artifacts from conv.artifacts (if backend returns them)
+        const backendArtifacts: ChatMessage[] = (conv.artifacts || []).map((a: any) => ({
+          role: "agent" as const, content: a.content || "", metadata: a.metadata,
         }));
-        setArtifacts(existingArtifacts);
+        const allArtifacts = restoredArtifacts.length > 0 ? restoredArtifacts : backendArtifacts;
+        if (allArtifacts.length > 0) setArtifacts(allArtifacts);
+
+        if (Object.keys(restoredBrief).length > 0) {
+          handleBriefDraftUpdate(restoredBrief as Partial<ClientBriefDraft>);
+        }
 
         // Also check if conv has brief_client_draft
         if (conv.brief_client_draft) {
