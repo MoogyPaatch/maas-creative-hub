@@ -5,7 +5,8 @@ export async function parseSSEStream(
   onMessage: (msg: ChatMessage) => void,
   onDone?: () => void,
   onThinking?: (label: string) => void,
-  onBriefDraft?: (draft: Partial<ClientBriefDraft>) => void
+  onBriefDraft?: (draft: Partial<ClientBriefDraft>) => void,
+  onActionRequired?: (action: string, options?: string[], validationData?: any) => void
 ): Promise<void> {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
