@@ -1,12 +1,12 @@
 import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { getProjects, createConversation } from "@/lib/api";
+import { getProjects, createConversation, deleteProject } from "@/lib/api";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import {
   Plus, Clock, CheckCircle2, AlertCircle, Loader2, Search, Filter,
-  LayoutGrid, Columns3, AlertTriangle, ArrowRight, LogOut, Bell, ChevronRight,
+  LayoutGrid, Columns3, AlertTriangle, ArrowRight, LogOut, Bell, ChevronRight, Trash2,
 } from "lucide-react";
 import { WORKFLOW_STEPS, CLIENT_PHASES, getClientPhaseIndex, getClientPhaseLabel } from "@/types";
 import type { Project } from "@/types";

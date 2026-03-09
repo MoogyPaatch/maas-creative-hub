@@ -82,6 +82,10 @@ export async function createProject() {
   return request<any>("/projects", { method: "POST", body: JSON.stringify({}) });
 }
 
+export async function deleteProject(id: string) {
+  return request<any>(`/projects/${id}`, { method: "DELETE" });
+}
+
 // Conversations
 export async function createConversation(
   projectId: string | null,
