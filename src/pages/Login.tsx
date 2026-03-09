@@ -82,7 +82,7 @@ const Login = () => {
         >
           {/* Mobile logo */}
           <div className="mb-10 lg:hidden">
-            <img src={logoWhite} alt="Marcel" className="h-12 w-auto invert dark:invert-0" />
+            <img src={logoBlack} alt="Marcel" className="h-12 w-auto dark:invert" />
           </div>
 
           <div className="mb-8">
