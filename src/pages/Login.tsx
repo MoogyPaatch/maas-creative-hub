@@ -60,7 +60,7 @@ const Login = () => {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.4 }}
-              className="text-4xl xl:text-5xl font-bold tracking-tight text-primary-foreground leading-[1.1] max-w-lg"
+              className="text-4xl xl:text-5xl font-bold tracking-tight text-foreground leading-[1.1] max-w-lg"
             >
               {taglines[taglineIdx]}
             </motion.h2>
