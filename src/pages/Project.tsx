@@ -509,10 +509,6 @@ const ProjectPage = () => {
     }
   }, [id]);
 
-  const [shareUrl, setShareUrl] = useState<string | null>(null);
-  const [showShareDialog, setShowShareDialog] = useState(false);
-  const [copied, setCopied] = useState(false);
-
   const handleShare = useCallback(async () => {
     if (!id) return;
     try {
