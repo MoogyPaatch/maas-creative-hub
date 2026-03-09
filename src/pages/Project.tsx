@@ -528,24 +528,8 @@ const ProjectPage = () => {
     );
   }
 
-  const handleShare = useCallback(async () => {
-    if (!id) return;
-    try {
-      const result = await createShareLink(id);
-      setShareUrl(result.share_url);
-      setShowShareDialog(true);
-    } catch {
-      toast.error("Impossible de créer le lien de partage");
-    }
-  }, [id]);
 
-  const handleCopyShareUrl = useCallback(() => {
-    if (!shareUrl) return;
-    navigator.clipboard.writeText(shareUrl);
-    setCopied(true);
-    toast.success("Lien copié !");
-    setTimeout(() => setCopied(false), 2000);
-  }, [shareUrl]);
+
 
   const outputPanelProps = {
     artifacts,
