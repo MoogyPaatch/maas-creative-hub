@@ -17,6 +17,8 @@ import {
   rejectValidation,
   uploadFile,
   validateClientBrief,
+  downloadDossierPDF,
+  createShareLink,
 } from "@/lib/api";
 import type { ClientBriefValidateRequest } from "@/lib/api";
 import { parseSSEStream } from "@/lib/sse";
