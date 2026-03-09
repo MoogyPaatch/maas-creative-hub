@@ -126,7 +126,7 @@ export interface BriefData {
 
 // ── Message Metadata ─────────────────────────────────────────────────────
 
-export interface MessageMetadata {
+export interface ChatMessageMetadata {
   type: string;
   content?: string;
   slides_url?: string;
@@ -159,7 +159,14 @@ export interface MessageMetadata {
   // status_update fields
   status?: string;
   phase_label?: string;
+  // action_required fields
+  action?: "validate_brief" | "select_piste" | "confirm";
+  options?: string[];
+  validation_data?: any;
 }
+
+// Legacy alias for compatibility
+export interface MessageMetadata extends ChatMessageMetadata {}
 
 // ── DC Piste (enriched) ──────────────────────────────────────────────────
 
