@@ -552,6 +552,43 @@ const Projects = () => {
               <option value="name">Nom A-Z</option>
               <option value="phase">Par phase</option>
             </select>
+
+            {!selectMode ? (
+              <button
+                onClick={() => setSelectMode(true)}
+                className="flex h-10 items-center gap-2 border border-border px-3 text-xs text-muted-foreground hover:text-foreground hover:border-foreground transition-colors"
+              >
+                Sélectionner
+              </button>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">
+                  {selectedIds.size} sélectionné{selectedIds.size !== 1 ? "s" : ""}
+                </span>
+                <button
+                  onClick={handleBulkDelete}
+                  disabled={selectedIds.size === 0 || bulkDeleting}
+                  className="flex h-10 items-center gap-2 bg-destructive px-3 text-xs font-bold text-destructive-foreground hover:bg-destructive/90 transition-colors disabled:opacity-50"
+                >
+                  {bulkDeleting ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-3 w-3" />
+                  )}
+                  Supprimer
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectMode(false);
+                    setSelectedIds(new Set());
+                  }}
+                  className="flex h-10 w-10 items-center justify-center border border-border text-muted-foreground hover:text-foreground hover:border-foreground transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+
             <div className="flex border border-border overflow-hidden">
               <button
                 onClick={() => setViewMode("grid")}
