@@ -49,7 +49,7 @@ const Login = () => {
         <div className="absolute top-0 left-0 w-1 h-full bg-accent" />
         
         <div>
-          <img src={logoWhite} alt="Marcel" className="h-14 w-auto" />
+          <img src={logoLion} alt="Marcel" className="h-24 w-auto invert" />
         </div>
 
         <div className="space-y-6">
