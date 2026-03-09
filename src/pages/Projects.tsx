@@ -163,9 +163,14 @@ const ClientDashboard = ({
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="flex flex-col items-center justify-center border border-dashed border-border py-24"
+          onClick={onNew}
+          className="flex flex-col items-center justify-center border border-dashed border-border py-24 cursor-pointer transition-colors hover:border-foreground hover:bg-muted/30"
         >
-          <Plus className="h-8 w-8 text-muted-foreground mb-4" />
+          {creating ? (
+            <Loader2 className="h-8 w-8 text-muted-foreground mb-4 animate-spin" />
+          ) : (
+            <Plus className="h-8 w-8 text-muted-foreground mb-4" />
+          )}
           <p className="text-sm font-bold text-foreground">Aucun projet</p>
           <p className="mt-1 text-sm text-muted-foreground">Lancez-vous !</p>
         </motion.div>
