@@ -72,6 +72,7 @@ const OutputPanel = ({
   onSelectPiste, onApprove, onReject,
   brandAssets = [], onBrandAssetsChange, highlightAssetCategories,
   showAssetsTab = true, onBriefChange, currentStep, isClientView = false, isStreaming = false, isValidatingBrief = false,
+  projectId,
 }: Props) => {
   const agencyOnlyTypes = new Set(["creative_brief", "dc_copy_result"]);
 
