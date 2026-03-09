@@ -44,12 +44,12 @@ const Login = () => {
   return (
     <div className="flex min-h-screen">
       {/* Left — branding panel */}
-      <div className="hidden lg:flex lg:w-1/2 flex-col justify-between bg-foreground p-12 relative overflow-hidden">
+      <div className="hidden lg:flex lg:w-1/2 flex-col justify-between bg-background p-12 relative overflow-hidden border-r border-border">
         {/* Subtle red accent line */}
         <div className="absolute top-0 left-0 w-1 h-full bg-accent" />
         
         <div>
-          <img src={logoLion} alt="Marcel" className="h-24 w-auto invert" />
+          <img src={logoLion} alt="Marcel" className="h-24 w-auto dark:invert" />
         </div>
 
         <div className="space-y-6">
@@ -60,7 +60,7 @@ const Login = () => {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.4 }}
-              className="text-4xl xl:text-5xl font-bold tracking-tight text-primary-foreground leading-[1.1] max-w-lg"
+              className="text-4xl xl:text-5xl font-bold tracking-tight text-foreground leading-[1.1] max-w-lg"
             >
               {taglines[taglineIdx]}
             </motion.h2>
@@ -68,7 +68,7 @@ const Login = () => {
           <div className="h-1 w-16 bg-accent" />
         </div>
 
-        <p className="text-sm text-primary-foreground/40 font-medium tracking-widest uppercase">
+        <p className="text-sm text-muted-foreground font-medium tracking-widest uppercase">
           Marcel as a Service
         </p>
       </div>
