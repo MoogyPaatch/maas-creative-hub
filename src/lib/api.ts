@@ -241,6 +241,30 @@ export async function getAssetAccessUrl(assetId: string) {
   return request<{ url: string }>(`/assets/${assetId}/access-url`);
 }
 
+function formatFileSize(bytes: number): string {
+  if (!bytes) return "—";
+  if (bytes < 1024) return `${bytes} o`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} Ko`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
+}
+
+export function mapBrandAsset(a: any) {
+  return {
+    id: a.id,
+    file_name: a.name,
+    file_type: a.mime_type || "application/octet-stream",
+    file_size: formatFileSize(a.file_size ?? 0),
+    preview_url: a.file_url || "",
+    uploaded_at: a.created_at,
+    category: a.category,
+  };
+}
+
+export async function getBrandAssets(projectId: string) {
+  const assets = await request<any[]>(`/brand-assets?project_id=${projectId}`, { silent404: true });
+  return (assets || []).map(mapBrandAsset);
+}
+
 // Validate client brief
 export interface ClientBriefValidateRequest {
   brand: string;

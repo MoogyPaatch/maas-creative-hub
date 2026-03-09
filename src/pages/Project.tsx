@@ -10,6 +10,8 @@ import {
   getProjectConversations,
   getBrief,
   getPPM,
+  getBrandAssets,
+  mapBrandAsset,
   sendMessageSSE,
   approveValidation,
   rejectValidation,
@@ -23,7 +25,7 @@ import OutputPanel from "@/components/output/OutputPanel";
 import WorkflowStepper from "@/components/layout/WorkflowStepper";
 import ConversationHistory from "@/components/chat/ConversationHistory";
 import { AnimatePresence } from "framer-motion";
-import type { ChatMessage, ProjectStatus, ConversationSummary, ClientBriefDraft } from "@/types";
+import type { ChatMessage, ProjectStatus, ConversationSummary, ClientBriefDraft, BrandAsset } from "@/types";
 import { EMPTY_BRIEF_DRAFT, CLIENT_BRIEF_REQUIRED_FIELDS } from "@/types";
 import { ArrowLeft, Loader2, History, Shield } from "lucide-react";
 import logoBlack from "@/assets/logo-marcel-black.png";
@@ -47,6 +49,7 @@ const ProjectPage = () => {
   const [projectStatus, setProjectStatus] = useState<ProjectStatus | null>(null);
   const [briefData, setBriefData] = useState<any>(null);
   const [briefId, setBriefId] = useState<string | null>(null);
+  const [brandAssets, setBrandAssets] = useState<BrandAsset[]>([]);
   const [loading, setLoading] = useState(true);
   const [mobileTab, setMobileTab] = useState<"chat" | "output">("chat");
   const [isValidatingBrief, setIsValidatingBrief] = useState(false);
@@ -155,11 +158,29 @@ const ProjectPage = () => {
             setBriefId(brief.id);
           }
         }).catch(() => {});
+        getBrandAssets(id).then((assets) => {
+          setBrandAssets(assets);
+        }).catch(() => {});
         getPPM(id).then((ppmData) => {
           if (ppmData) {
+            const ppmMetadata = {
+              type: "ppm_presentation" as const,
+              summary: `PPM – ${ppmData.status || "en cours"}`,
+              storyboard: ppmData.frames || [],
+              storyboard_count: (ppmData.frames || []).length,
+              casting: ppmData.casting_direction || [],
+              casting_count: (ppmData.casting_direction || []).length,
+              settings: ppmData.settings_direction || [],
+              settings_count: (ppmData.settings_direction || []).length,
+              mockups: ppmData.finalized_mockups || [],
+              mockup_count: (ppmData.finalized_mockups || []).length,
+              production_notes: ppmData.production_notes || {},
+              slides_url: null,
+              pptx_url: null,
+            };
             setArtifacts((prev) => {
               if (prev.some((a) => a.metadata?.type === "ppm_presentation")) return prev;
-              return [...prev, { role: "agent", content: "", metadata: { type: "ppm_presentation", ...ppmData } }];
+              return [...prev, { role: "agent", content: "", metadata: ppmMetadata }];
             });
           }
         }).catch(() => {});
@@ -266,9 +287,24 @@ const ProjectPage = () => {
           }).catch(() => {});
           getPPM(id).then((ppmData) => {
             if (ppmData) {
+              const ppmMetadata = {
+                type: "ppm_presentation" as const,
+                summary: `PPM – ${ppmData.status || "en cours"}`,
+                storyboard: ppmData.frames || [],
+                storyboard_count: (ppmData.frames || []).length,
+                casting: ppmData.casting_direction || [],
+                casting_count: (ppmData.casting_direction || []).length,
+                settings: ppmData.settings_direction || [],
+                settings_count: (ppmData.settings_direction || []).length,
+                mockups: ppmData.finalized_mockups || [],
+                mockup_count: (ppmData.finalized_mockups || []).length,
+                production_notes: ppmData.production_notes || {},
+                slides_url: null,
+                pptx_url: null,
+              };
               setArtifacts((prev) => {
                 const idx = prev.findIndex((a) => a.metadata?.type === "ppm_presentation");
-                const newArtifact: ChatMessage = { role: "agent", content: "", metadata: { type: "ppm_presentation", ...ppmData } };
+                const newArtifact: ChatMessage = { role: "agent", content: "", metadata: ppmMetadata };
                 if (idx >= 0) {
                   const updated = [...prev];
                   updated[idx] = newArtifact;
@@ -362,7 +398,8 @@ const ProjectPage = () => {
       }
       try {
         toast.info(`Upload de ${file.name}...`);
-        await uploadFile(id, file);
+        const uploadedAsset = await uploadFile(id, file);
+        setBrandAssets((prev) => [...prev, mapBrandAsset(uploadedAsset)]);
         setMessages((prev) => [...prev, { role: "user", content: `📎 ${file.name}`, timestamp: new Date() }]);
         toast.success(`${file.name} envoyé`);
         const ext = file.name.split(".").pop()?.toLowerCase();
@@ -425,6 +462,8 @@ const ProjectPage = () => {
     onSelectPiste: handleSelectPiste,
     onApprove: handleApprove,
     onReject: handleReject,
+    brandAssets,
+    onBrandAssetsChange: setBrandAssets,
     currentStep: projectStatus?.current_step || "commercial",
     isClientView: isClient,
     isStreaming,
