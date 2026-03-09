@@ -589,7 +589,25 @@ const ProjectPage = () => {
           />
         </div>
 
-        <div className="hidden sm:flex items-center gap-4">
+        <div className="hidden sm:flex items-center gap-2">
+          {isAgency && (
+            <>
+              <button
+                onClick={handleDownloadDossier}
+                className="flex h-8 w-8 items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                title="Télécharger le dossier"
+              >
+                <Download className="h-4 w-4" />
+              </button>
+              <button
+                onClick={handleShare}
+                className="flex h-8 w-8 items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                title="Partager"
+              >
+                <Share2 className="h-4 w-4" />
+              </button>
+            </>
+          )}
           {isAgency && conversations.length > 1 && (
             <button
               onClick={() => setShowHistory(!showHistory)}
@@ -604,6 +622,30 @@ const ProjectPage = () => {
           <span className="text-[10px] text-muted-foreground font-medium">{user?.email}</span>
         </div>
       </header>
+
+      {/* Share dialog */}
+      {showShareDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowShareDialog(false)}>
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-foreground mb-4">Lien de partage</h3>
+            <div className="flex gap-2">
+              <input
+                readOnly
+                value={shareUrl || ""}
+                className="flex-1 rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground"
+              />
+              <button
+                onClick={handleCopyShareUrl}
+                className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition"
+              >
+                {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                {copied ? "Copié" : "Copier"}
+              </button>
+            </div>
+            <p className="mt-3 text-xs text-muted-foreground">Ce lien donne accès en lecture seule au dossier.</p>
+          </div>
+        </div>
+      )}
 
       {/* Desktop */}
       <div className="hidden md:flex flex-1 overflow-hidden relative">
