@@ -688,8 +688,8 @@ const Projects = () => {
                             </div>
                           </div>
                           <div 
-                            onClick={() => navigate(`/project/${p.id}`)}
-                            className="cursor-pointer"
+                            onClick={() => !selectMode && navigate(`/project/${p.id}`)}
+                            className={selectMode ? "" : "cursor-pointer"}
                           >
                             <div className="flex items-center justify-between">
                               <span className="text-[10px] text-muted-foreground font-medium">
