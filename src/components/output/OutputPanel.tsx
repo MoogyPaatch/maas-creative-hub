@@ -191,6 +191,7 @@ const OutputPanel = ({
                   onFieldChange={onClientBriefFieldChange}
                   onValidate={onValidateClientBrief}
                   isStreaming={isStreaming}
+                  isValidating={isValidatingBrief}
                 />
               </motion.div>
             )}
