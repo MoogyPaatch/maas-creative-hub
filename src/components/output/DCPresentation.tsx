@@ -1,8 +1,16 @@
-import { useMemo } from "react";
-import { motion } from "framer-motion";
-import { Sparkles, Star, ChevronDown, Play, Monitor, Newspaper, Smartphone, AlertTriangle, Shield, Flame, Headphones } from "lucide-react";
-import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
-import { Progress } from "@/components/ui/progress";
+import { useMemo, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Sparkles,
+  Star,
+  Shield,
+  Zap,
+  Flame,
+  Play,
+  ChevronDown,
+  ChevronUp,
+  TrendingUp,
+} from "lucide-react";
 import SlideShell, { type SlideItem } from "./SlideShell";
 import ImageWithFallback from "@/components/ui/ImageWithFallback";
 import type { MessageMetadata, DCPiste, AgencyRecommendation } from "@/types";
@@ -12,58 +20,67 @@ interface Props {
   onSelectPiste?: (pisteId: string) => void;
 }
 
-function pisteColor(title: string, index: number): string {
+/* ─── Accent colors per piste ─── */
+function pisteColor(_title: string, index: number): string {
   const hues = [250, 340, 160, 30, 200];
   const h = hues[index % hues.length];
   return `hsl(${h}, 60%, 55%)`;
 }
 
-const RISK_CONFIG: Record<string, { label: string; color: string; icon: React.ElementType }> = {
-  safe: { label: "Safe", color: "hsl(142, 60%, 45%)", icon: Shield },
-  bold: { label: "Bold", color: "hsl(30, 90%, 55%)", icon: Flame },
-  provocateur: { label: "Provocateur", color: "hsl(0, 70%, 55%)", icon: AlertTriangle },
+/* ─── Risk Level Badge ─── */
+const RISK_CONFIG: Record<string, { icon: typeof Shield; label: string; colorClass: string }> = {
+  safe: { icon: Shield, label: "Safe", colorClass: "text-emerald-400 border-emerald-400/30 bg-emerald-400/10" },
+  bold: { icon: Zap, label: "Bold", colorClass: "text-amber-400 border-amber-400/30 bg-amber-400/10" },
+  provocateur: { icon: Flame, label: "Provocateur", colorClass: "text-orange-500 border-orange-500/30 bg-orange-500/10" },
 };
 
 function RiskBadge({ level }: { level?: string }) {
-  if (!level) return null;
-  const config = RISK_CONFIG[level] || RISK_CONFIG.bold;
-  const Icon = config.icon;
+  if (!level || !RISK_CONFIG[level]) return null;
+  const cfg = RISK_CONFIG[level];
+  const Icon = cfg.icon;
   return (
-    <span
-      className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider shadow-sm"
-      style={{ backgroundColor: `${config.color}15`, color: config.color, border: `1px solid ${config.color}30` }}
-    >
-      <Icon className="h-3 w-3" />
-      {config.label}
+    <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${cfg.colorClass}`}>
+      <Icon className="h-2.5 w-2.5" />
+      {cfg.label}
     </span>
   );
 }
 
-function ConvictionBar({ value, accentColor }: { value?: string; accentColor?: string }) {
-  if (!value) return null;
-  const n = parseInt(value, 10);
-  if (isNaN(n)) return null;
+/* ─── Conviction Score ─── */
+function ConvictionScore({ score, accentColor }: { score?: string; accentColor: string }) {
+  if (!score) return null;
+  const numScore = parseInt(score, 10);
+  if (isNaN(numScore)) return null;
+  const normalized = Math.min(Math.max(numScore, 0), 10);
+
   return (
-    <div className="flex items-center gap-3 py-2">
-      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">
+    <div className="flex items-center gap-2">
+      <TrendingUp className="h-3 w-3 text-muted-foreground" />
+      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
         Conviction agence
       </span>
-      <div className="flex-1 max-w-[140px]">
-        <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+      <div className="flex items-center gap-0.5">
+        {Array.from({ length: 10 }).map((_, i) => (
           <motion.div
-            className="h-full rounded-full"
-            style={{ backgroundColor: accentColor || "hsl(var(--primary))" }}
-            initial={{ width: 0 }}
-            animate={{ width: `${n * 10}%` }}
-            transition={{ duration: 0.8, ease: "easeOut", delay: 0.3 }}
+            key={i}
+            initial={{ scaleY: 0 }}
+            animate={{ scaleY: 1 }}
+            transition={{ delay: 0.05 * i, duration: 0.2 }}
+            className="h-3 w-1 rounded-full origin-bottom"
+            style={{
+              backgroundColor: i < normalized ? accentColor : "hsl(var(--muted-foreground) / 0.15)",
+            }}
           />
-        </div>
+        ))}
       </div>
-      <span className="text-sm font-extrabold text-foreground tabular-nums">{n}/10</span>
+      <span className="text-xs font-bold tabular-nums" style={{ color: accentColor }}>
+        {normalized}/10
+      </span>
     </div>
   );
 }
 
+/* ─── Recommendation Badge ─── */
 function RecommendationBadge() {
   return (
     <motion.span
@@ -78,122 +95,46 @@ function RecommendationBadge() {
   );
 }
 
-function FormatExecutions({ executions }: { executions?: DCPiste["format_executions"] }) {
-  if (!executions) return null;
-  const entries = Object.entries(executions).filter(([, v]) => v);
-  if (entries.length === 0) return null;
-
-  const icons: Record<string, React.ElementType> = {
-    social: Smartphone,
-    print: Newspaper,
-    digital: Monitor,
-    audio: Headphones,
-  };
+/* ─── Expandable text section ─── */
+function Section({ label, text, accent }: { label: string; text: string; accent?: boolean }) {
+  const [expanded, setExpanded] = useState(false);
+  const isLong = text.length > 180;
 
   return (
-    <Collapsible>
-      <CollapsibleTrigger className="group flex w-full items-center gap-2 py-2.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors">
-        <ChevronDown className="h-3 w-3 transition-transform duration-200 group-data-[state=open]:rotate-180" />
-        Declinaisons par format
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="space-y-2 pl-2 pt-1 pb-3"
-        >
-          {entries.map(([format, desc]) => {
-            const Icon = icons[format] || Monitor;
-            return (
-              <div key={format} className="flex items-start gap-3 rounded-xl border border-border bg-muted/20 p-3.5 transition-colors hover:bg-muted/40">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                  <Icon className="h-4 w-4 text-primary" />
-                </div>
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                    {format}
-                  </span>
-                  <p className="text-xs leading-relaxed text-foreground mt-0.5">{desc}</p>
-                </div>
-              </div>
-            );
-          })}
-        </motion.div>
-      </CollapsibleContent>
-    </Collapsible>
-  );
-}
-
-function VideoConcept({ concept }: { concept?: DCPiste["video_concept"] }) {
-  if (!concept) return null;
-  return (
-    <Collapsible>
-      <CollapsibleTrigger className="group flex w-full items-center gap-2 py-2.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors">
-        <Play className="h-3 w-3" />
-        Concept video — {concept.duration_target}
-        <ChevronDown className="h-3 w-3 ml-auto transition-transform duration-200 group-data-[state=open]:rotate-180" />
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="pl-2 pt-1 pb-3 space-y-3"
-        >
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <div className="rounded-xl border border-border bg-muted/20 p-3">
-              <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Tone</span>
-              <p className="text-foreground mt-0.5">{concept.tone_video}</p>
-            </div>
-            <div className="rounded-xl border border-border bg-muted/20 p-3">
-              <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Musique</span>
-              <p className="text-foreground mt-0.5">{concept.music_direction}</p>
-            </div>
-          </div>
-          <p className="text-xs text-muted-foreground leading-relaxed">{concept.concept_summary}</p>
-
-          {/* Sequences timeline */}
-          {concept.sequences?.length > 0 && (
-            <div className="relative pl-5 border-l-2 border-primary/30 space-y-4">
-              {concept.sequences.map((seq, idx) => (
-                <motion.div
-                  key={seq.sequence}
-                  initial={{ opacity: 0, x: -8 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: idx * 0.1 }}
-                  className="relative"
-                >
-                  <div className="absolute -left-[23px] top-1.5 h-2.5 w-2.5 rounded-full bg-primary border-2 border-background" />
-                  <div className="text-xs space-y-0.5">
-                    <span className="font-bold text-foreground">{seq.timing}</span>
-                    <p className="text-foreground/80">{seq.visual}</p>
-                    {seq.voiceover && (
-                      <p className="text-muted-foreground italic">Voix-off : {seq.voiceover}</p>
-                    )}
-                    {seq.sound && (
-                      <p className="text-muted-foreground">Son : {seq.sound}</p>
-                    )}
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          )}
-        </motion.div>
-      </CollapsibleContent>
-    </Collapsible>
-  );
-}
-
-function Section({ label, text }: { label: string; text: string }) {
-  return (
-    <div className="rounded-xl border border-border bg-muted/20 p-5 transition-colors hover:bg-muted/30">
-      <h4 className="mb-2 text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">
+    <div
+      className={`rounded-lg border px-4 py-3 transition-colors ${
+        accent
+          ? "border-primary/20 bg-primary/5"
+          : "border-border/40 bg-muted/5"
+      } ${isLong ? "cursor-pointer hover:bg-muted/15" : ""}`}
+      onClick={() => isLong && setExpanded((v) => !v)}
+    >
+      <h4 className={`mb-1.5 text-[10px] font-bold uppercase tracking-[0.15em] ${
+        accent ? "text-primary/80" : "text-muted-foreground"
+      }`}>
         {label}
       </h4>
-      <p className="text-sm leading-relaxed text-foreground">{text}</p>
+      <p
+        className={`text-[13px] leading-relaxed text-foreground/90 transition-all duration-300 ${
+          !expanded && isLong ? "line-clamp-3" : ""
+        }`}
+      >
+        {text}
+      </p>
+      {isLong && (
+        <span className="mt-1 inline-flex items-center gap-0.5 text-[10px] font-medium text-primary/70 uppercase tracking-wider">
+          {expanded ? (
+            <><ChevronUp className="h-2.5 w-2.5" /> Reduire</>
+          ) : (
+            <><ChevronDown className="h-2.5 w-2.5" /> Lire la suite</>
+          )}
+        </span>
+      )}
     </div>
   );
 }
 
+/* ─── Main Piste Slide ─── */
 function PisteSlide({
   piste,
   index,
@@ -211,124 +152,210 @@ function PisteSlide({
 
   return (
     <div className="flex h-full w-full flex-col lg:flex-row overflow-hidden bg-card">
-      {/* Left: image or number */}
+      {/* Left: Hero visual area */}
       {hasImage ? (
-        <div className="relative h-2/5 w-full lg:h-full lg:w-1/2 overflow-hidden">
-          <ImageWithFallback src={piste.thumbnail_url} alt={piste.title} className="h-full w-full object-cover" />
+        <div className="relative h-2/5 w-full lg:h-full lg:w-[45%] overflow-hidden group">
+          <ImageWithFallback
+            src={piste.thumbnail_url}
+            alt={piste.title}
+            className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+          />
+          {/* Cinematic gradient overlay */}
           <div className="absolute inset-0 bg-gradient-to-t from-card via-card/20 to-transparent lg:bg-gradient-to-r lg:from-transparent lg:via-card/10 lg:to-card" />
-          <div className="absolute bottom-4 left-4 flex items-center gap-2">
-            <span
-              className="rounded-full px-4 py-1.5 text-xs font-bold tracking-wide uppercase shadow-lg"
-              style={{ backgroundColor: accentColor, color: "white" }}
-            >
-              Piste {index + 1}
-            </span>
-            {isRecommended && <RecommendationBadge />}
+
+          {/* Bottom overlay: piste badge + risk */}
+          <div className="absolute bottom-0 left-0 right-0 p-4 flex items-end justify-between">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span
+                className="rounded-full px-3.5 py-1 text-[11px] font-bold tracking-wide uppercase shadow-lg"
+                style={{ backgroundColor: accentColor, color: "white" }}
+              >
+                Piste {index + 1}
+              </span>
+              {isRecommended && <RecommendationBadge />}
+              <RiskBadge level={piste.risk_level} />
+            </div>
           </div>
         </div>
       ) : (
         <div
-          className="relative flex h-2/5 w-full lg:h-full lg:w-1/2 items-center justify-center overflow-hidden"
+          className="relative flex h-2/5 w-full lg:h-full lg:w-[45%] items-center justify-center overflow-hidden"
           style={{ background: `linear-gradient(135deg, ${accentColor}08 0%, ${accentColor}15 100%)` }}
         >
           <span
-            className="pointer-events-none select-none text-[18rem] font-black leading-none lg:text-[24rem]"
-            style={{ color: accentColor, opacity: 0.08 }}
+            className="pointer-events-none select-none text-[16rem] font-black leading-none lg:text-[22rem]"
+            style={{ color: accentColor, opacity: 0.06 }}
           >
             {index + 1}
           </span>
-          <div className="absolute bottom-4 left-4 flex items-center gap-2">
-            <span
-              className="rounded-full px-4 py-1.5 text-xs font-bold tracking-wide uppercase shadow-sm"
-              style={{ backgroundColor: `${accentColor}20`, color: accentColor, border: `1px solid ${accentColor}40` }}
-            >
-              Piste {index + 1}
-            </span>
-            {isRecommended && <RecommendationBadge />}
+          <div className="absolute bottom-0 left-0 right-0 p-4 flex items-end justify-between">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span
+                className="rounded-full px-3.5 py-1 text-[11px] font-bold tracking-wide uppercase shadow-sm"
+                style={{ backgroundColor: `${accentColor}18`, color: accentColor, border: `1px solid ${accentColor}35` }}
+              >
+                Piste {index + 1}
+              </span>
+              {isRecommended && <RecommendationBadge />}
+              <RiskBadge level={piste.risk_level} />
+            </div>
           </div>
         </div>
       )}
 
-      {/* Right: content */}
-      <div className="flex h-3/5 w-full lg:h-full lg:w-1/2 flex-col justify-start p-6 lg:p-8 overflow-y-auto scrollbar-thin">
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
-        >
-          <h3 className="mb-1 text-2xl font-extrabold tracking-tight text-foreground lg:text-3xl">
-            {piste.title}
-          </h3>
-          {piste.headline && piste.headline !== piste.title && (
-            <p className="mb-4 text-base font-medium text-primary italic lg:text-lg">
-              &ldquo;{piste.headline}&rdquo;
-            </p>
-          )}
-
-          {/* Badges row */}
-          <div className="flex flex-wrap items-center gap-2 mb-3">
-            <RiskBadge level={piste.risk_level} />
-            {isRecommended && !hasImage && <RecommendationBadge />}
-          </div>
-
-          <ConvictionBar value={piste.agency_conviction} accentColor={accentColor} />
-
-          <div className="mt-4 mb-4 space-y-3">
-            <Section label="Concept" text={piste.concept} />
-            <Section label="Direction visuelle" text={piste.tone} />
-            <Section label="Justification strategique" text={piste.justification} />
-            {piste.differentiation && <Section label="Differenciation" text={piste.differentiation} />}
-          </div>
-
-          {/* Collapsible sections */}
-          <FormatExecutions executions={piste.format_executions} />
-          <VideoConcept concept={piste.video_concept} />
-
-          <motion.div
-            className="mt-6"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.5 }}
-          >
-            <button
+      {/* Right: Content panel */}
+      <div className="flex h-3/5 w-full lg:h-full lg:w-[55%] flex-col justify-start overflow-y-auto scrollbar-thin">
+        {/* Sticky header with title + CTA */}
+        <div className="sticky top-0 z-10 bg-card/95 backdrop-blur-sm border-b border-border/20 px-5 pt-5 pb-3 lg:px-6 lg:pt-6">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <h3 className="text-xl font-extrabold tracking-tight text-foreground lg:text-2xl leading-tight">
+                {piste.title}
+              </h3>
+              {piste.headline && piste.headline !== piste.title && (
+                <p className="mt-1.5 text-sm font-medium text-primary/80 italic lg:text-base leading-snug">
+                  &ldquo;{piste.headline}&rdquo;
+                </p>
+              )}
+            </div>
+            <motion.button
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.3 }}
               onClick={() => onSelect?.(piste.id)}
-              className="group flex h-12 w-fit items-center gap-2.5 rounded-xl px-8 text-sm font-bold text-white shadow-lg transition-all hover:shadow-xl hover:scale-[1.02] active:scale-[0.98]"
+              className="group flex h-10 items-center gap-2 rounded-lg px-5 text-sm font-bold text-white shadow-md transition-all hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] flex-shrink-0"
               style={{ backgroundColor: accentColor }}
             >
-              <Sparkles className="h-4 w-4 transition-transform group-hover:rotate-12" />
+              <Sparkles className="h-3.5 w-3.5 transition-transform group-hover:rotate-12" />
+              <span className="hidden sm:inline">Choisir</span>
+            </motion.button>
+          </div>
+
+          {/* Conviction score + risk (when no image) */}
+          <div className="mt-2.5 flex items-center gap-3 flex-wrap">
+            <ConvictionScore score={piste.agency_conviction} accentColor={accentColor} />
+            {!hasImage && <RiskBadge level={piste.risk_level} />}
+          </div>
+        </div>
+
+        {/* Scrollable content body */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, delay: 0.1 }}
+          className="px-5 py-4 lg:px-6 space-y-3"
+        >
+          {/* Core sections */}
+          <Section label="Concept creatif" text={piste.concept} accent />
+          <Section label="Direction visuelle" text={piste.tone} />
+          <Section label="Justification strategique" text={piste.justification} />
+          {piste.differentiation && (
+            <Section label="Differenciation" text={piste.differentiation} />
+          )}
+
+          {/* Video concept — one-line teaser only (full details in PPM) */}
+          {piste.video_concept?.concept_summary && (
+            <div className="flex items-start gap-2 rounded-lg border border-border/30 bg-muted/5 px-4 py-2.5">
+              <Play className="h-3.5 w-3.5 mt-0.5 text-muted-foreground flex-shrink-0" />
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">
+                  Concept video
+                </span>
+                <p className="text-[13px] leading-relaxed text-foreground/80 mt-0.5">
+                  {piste.video_concept.concept_summary}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Bottom CTA for mobile (visible when top CTA scrolls away) */}
+          <div className="pt-2 pb-1 lg:hidden">
+            <button
+              onClick={() => onSelect?.(piste.id)}
+              className="group flex h-11 w-full items-center justify-center gap-2 rounded-lg text-sm font-bold text-white shadow-md transition-all hover:shadow-lg active:scale-[0.98]"
+              style={{ backgroundColor: accentColor }}
+            >
+              <Sparkles className="h-3.5 w-3.5 transition-transform group-hover:rotate-12" />
               Choisir cette piste
             </button>
-          </motion.div>
+          </div>
         </motion.div>
       </div>
     </div>
   );
 }
 
-function RecommendationEncadre({ recommendation }: { recommendation?: AgencyRecommendation }) {
+/* ─── Agency Recommendation Encadre ─── */
+function RecommendationEncadre({
+  recommendation,
+  pistes,
+}: {
+  recommendation?: AgencyRecommendation;
+  pistes: DCPiste[];
+}) {
   if (!recommendation?.why) return null;
+  const [expanded, setExpanded] = useState(false);
+  const isLong = (recommendation.why?.length || 0) > 200;
+  const recommendedPiste = recommendation.recommended_piste
+    ? pistes[recommendation.recommended_piste - 1]
+    : null;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className="border-t border-primary/20 bg-primary/5 px-6 py-5 space-y-2.5"
+      className="border-t border-primary/20 bg-primary/5 px-5 py-4 space-y-2.5"
     >
-      <div className="flex items-center gap-2">
-        <Star className="h-4 w-4 fill-primary text-primary" />
-        <span className="text-xs font-bold uppercase tracking-wider text-primary">
-          {recommendation.recommendation_title || "Recommandation Marcel"}
-        </span>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Star className="h-3.5 w-3.5 fill-primary text-primary" />
+          <span className="text-[11px] font-bold uppercase tracking-wider text-primary">
+            {recommendation.recommendation_title || "Recommandation Marcel"}
+          </span>
+          {recommendedPiste && (
+            <span className="text-[11px] font-semibold text-primary/60">
+              — {recommendedPiste.title}
+            </span>
+          )}
+        </div>
+        {isLong && (
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            className="text-[10px] font-medium text-primary/70 uppercase tracking-wider hover:text-primary transition-colors flex items-center gap-0.5"
+          >
+            {expanded ? (
+              <><ChevronUp className="h-2.5 w-2.5" /> Reduire</>
+            ) : (
+              <><ChevronDown className="h-2.5 w-2.5" /> Details</>
+            )}
+          </button>
+        )}
       </div>
-      <p className="text-sm leading-relaxed text-foreground">{recommendation.why}</p>
-      {recommendation.what_if_not && (
-        <p className="text-xs leading-relaxed text-muted-foreground italic mt-1">
-          Alternative : {recommendation.what_if_not}
-        </p>
-      )}
+      <p
+        className={`text-[13px] leading-relaxed text-foreground/90 transition-all duration-300 ${
+          !expanded && isLong ? "line-clamp-2" : ""
+        }`}
+        onClick={() => isLong && setExpanded((v) => !v)}
+      >
+        {recommendation.why}
+      </p>
+      <AnimatePresence>
+        {recommendation.what_if_not && (expanded || !isLong) && (
+          <motion.p
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="text-xs leading-relaxed text-muted-foreground italic border-l-2 border-primary/20 pl-3"
+          >
+            Alternative : {recommendation.what_if_not}
+          </motion.p>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
 
+/* ─── Main Component ─── */
 const DCPresentation = ({ metadata, onSelectPiste }: Props) => {
   const pistes = metadata.pistes || [];
   const recommendation = metadata.agency_recommendation;
@@ -340,7 +367,6 @@ const DCPresentation = ({ metadata, onSelectPiste }: Props) => {
         const isRecommended = recommendation?.recommended_piste === i + 1;
 
         return {
-          icon: isRecommended ? Star : Sparkles,
           title: piste.title,
           color: `${color.replace(")", "/0.3)")}`,
           content: (
@@ -368,7 +394,7 @@ const DCPresentation = ({ metadata, onSelectPiste }: Props) => {
           pptxUrl={metadata.pptx_url}
         />
       </div>
-      <RecommendationEncadre recommendation={recommendation} />
+      <RecommendationEncadre recommendation={recommendation} pistes={pistes} />
     </div>
   );
 };

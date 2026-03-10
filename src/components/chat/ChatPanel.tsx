@@ -4,6 +4,7 @@ import ChatMessageBubble from "./ChatMessage";
 import ChatInput from "./ChatInput";
 import type { ChatInputHandle } from "./ChatInput";
 import ThinkingIndicator from "./ThinkingIndicator";
+import type { ThinkingState } from "./ThinkingIndicator";
 import { ArrowDown } from "lucide-react";
 import type { ChatMessage } from "@/types";
 import logoBlack from "@/assets/logo-marcel-black.png";
@@ -11,7 +12,7 @@ import logoWhite from "@/assets/logo-marcel-white.png";
 
 interface Props {
   messages: ChatMessage[];
-  thinking: string | null;
+  thinking: ThinkingState | null;
   onSendMessage: (text: string) => void;
   onQuickReply: (id: string) => void;
   onAttach?: (files: FileList) => void;
@@ -22,7 +23,7 @@ interface Props {
 const BRIEF_VALIDATED_PATTERNS = [
   "brief_client_validate",
   "brief valide",
-  "brief validé",
+  "brief valid\u00e9",
   "production en cours",
   "lancement du pipeline",
 ];
@@ -139,12 +140,12 @@ const ChatPanel = ({ messages, thinking, onSendMessage, onQuickReply, onAttach, 
                 onTriggerFileUpload={handleTriggerFileUpload}
               />
               {i === dividerAfterIndex && (
-                <PhaseDivider label="Brief valide — Production en cours" />
+                <PhaseDivider label="Brief valide \u2014 Production en cours" />
               )}
             </div>
           ))}
           <AnimatePresence>
-            {thinking && <ThinkingIndicator label={thinking} />}
+            {thinking && <ThinkingIndicator thinkingState={thinking} />}
           </AnimatePresence>
         </div>
 

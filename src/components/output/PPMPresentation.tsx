@@ -1,10 +1,10 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Film,
   Users,
   MapPin,
-  Wrench,
-  Image,
+  Package,
   FileText,
   CheckCircle2,
   MessageSquare,
@@ -14,19 +14,16 @@ import {
   Headphones,
   Monitor,
   Mic,
-  Music,
   Layout,
   Clock,
   Camera,
-  Scissors,
-  Clapperboard,
-  Tv,
-  Hash,
-  Play,
   Layers,
+  X,
+  Maximize2,
+  Download,
+  ExternalLink,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
-import SlideShell, { type SlideItem } from "./SlideShell";
 import type { MessageMetadata } from "@/types";
 import { approvePPMGate } from "@/lib/api";
 import { toast } from "sonner";
@@ -35,19 +32,89 @@ interface Props {
   metadata: MessageMetadata;
   projectId?: string;
   currentStep?: string;
+  onPPMApprove?: (action: "approve" | "revision", feedback?: string) => Promise<void>;
 }
 
-/* ─── Helpers ─── */
+/* ── Helpers ── */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const safe = (v: any, fallback = "") => (v != null ? String(v) : fallback);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type R = Record<string, any>;
 
-/* ─── Reusable Slide Sub-Components ─── */
+/* ── Image Lightbox ── */
+function ImageLightbox({ src, alt, onClose }: { src: string; alt: string; onClose: () => void }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <button
+        onClick={onClose}
+        className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-foreground transition-colors hover:bg-white/20"
+      >
+        <X className="h-5 w-5" />
+      </button>
+      <motion.img
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ duration: 0.3 }}
+        src={src}
+        alt={alt}
+        className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      />
+    </motion.div>
+  );
+}
+
+/* ── Clickable Image ── */
+function ClickableImage({
+  src,
+  alt,
+  className,
+  aspectClass,
+}: {
+  src: string;
+  alt: string;
+  className?: string;
+  aspectClass?: string;
+}) {
+  const [lightbox, setLightbox] = useState(false);
+  const [error, setError] = useState(false);
+
+  if (error || !src) return null;
+
+  return (
+    <>
+      <div
+        className={`group relative cursor-pointer overflow-hidden ${aspectClass || "aspect-video"} ${className || ""}`}
+        onClick={() => setLightbox(true)}
+      >
+        <img
+          src={src}
+          alt={alt}
+          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+          onError={() => setError(true)}
+        />
+        <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors duration-300 group-hover:bg-black/30">
+          <Maximize2 className="h-6 w-6 text-foreground opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+        </div>
+      </div>
+      <AnimatePresence>
+        {lightbox && <ImageLightbox src={src} alt={alt} onClose={() => setLightbox(false)} />}
+      </AnimatePresence>
+    </>
+  );
+}
+
+/* ── Reusable Sub-Components ── */
 function SectionHeader({ icon: Icon, title, subtitle }: { icon: React.ElementType; title: string; subtitle?: string }) {
   return (
     <div className="mb-6 flex items-center gap-3">
-      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/15">
+      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10">
         <Icon className="h-4.5 w-4.5 text-primary" />
       </div>
       <div>
@@ -60,656 +127,612 @@ function SectionHeader({ icon: Icon, title, subtitle }: { icon: React.ElementTyp
 
 function InfoChip({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
-    <div className={`rounded-xl border p-4 ${accent ? "border-primary/30 bg-primary/5" : "border-border bg-muted/20"}`}>
+    <div className={`rounded-xl border p-4 ${accent ? "border-primary/20 bg-primary/5" : "border-border bg-muted/50"}`}>
       <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{label}</p>
       <p className={`mt-1 text-sm font-medium ${accent ? "text-primary" : "text-foreground"}`}>{value}</p>
     </div>
   );
 }
 
-/* ─── Slide Builders ─── */
-function buildSlides(metadata: MessageMetadata): SlideItem[] {
-  const slides: SlideItem[] = [];
-  const detected = metadata.detected_formats || [];
+/* ── Data extraction helpers ── */
 
-  // ────────────────────────── 1. Title / Overview slide ──────────────────────────
+/**
+ * Extract storyboard sequences from metadata.
+ * Backend sends storyboard at top-level AND inside video_specs.storyboard.
+ * Also check composed_scenes for image URLs.
+ */
+function extractStoryboard(metadata: MessageMetadata): R[] {
   const videoSpecs = metadata.video_specs as R | undefined;
-  const socialSpecs = metadata.social_specs as R | undefined;
-  const digitalSpecs = metadata.digital_specs as R | undefined;
-  const projectTitle = videoSpecs?.project_title || socialSpecs?.project_title || "";
+  // Priority: top-level storyboard > video_specs.storyboard > empty
+  let sb = metadata.storyboard as R[] | undefined;
+  if (!sb || !Array.isArray(sb) || sb.length === 0) {
+    sb = videoSpecs?.storyboard as R[] | undefined;
+  }
+  if (!sb || !Array.isArray(sb)) return [];
 
-  // Collect video versions
-  const videoVersions: { label: string; data: R }[] = [];
-  if (videoSpecs) {
-    for (const [key, val] of Object.entries(videoSpecs)) {
-      if (key.startsWith("video_specs_") && val && typeof val === "object") {
-        const label = key.replace("video_specs_", "");
-        videoVersions.push({ label, data: val as R });
-      }
-    }
-    // Fallback: flat storyboard at root level
-    if (videoVersions.length === 0 && (videoSpecs.storyboard || metadata.storyboard)) {
-      videoVersions.push({ label: "", data: videoSpecs });
-    }
+  // Backend may send NESTED format: [{scenes: [...], duration_target}, ...]
+  // Flatten to individual sequences if nested
+  if (sb.length > 0 && sb[0].scenes && Array.isArray(sb[0].scenes)) {
+    const flat: R[] = [];
+    sb.forEach((group) => {
+      const scenes = Array.isArray(group.scenes) ? group.scenes : [];
+      scenes.forEach((scene: R) => {
+        // Inherit group-level duration_target if scene has no timing
+        if (!scene.timing && !scene.duration && group.duration_target) {
+          scene.group_duration = group.duration_target;
+        }
+        flat.push(scene);
+      });
+    });
+    sb = flat;
   }
 
-  // Count totals
-  const totalSequences = videoVersions.reduce((sum, v) => sum + (v.data.storyboard?.length || 0), 0);
-  const platforms = (socialSpecs?.platforms || []) as R[];
-  const feedPosts = (socialSpecs?.feed_posts || []) as R[];
-  const storiesReels = (socialSpecs?.stories_reels || []) as R[];
-  const carousels = (socialSpecs?.carousels || []) as R[];
-
-  slides.push({
-    icon: FileText,
-    title: "Dossier PPM",
-    color: "hsl(239, 60%, 55%, 0.2)",
-    content: (
-      <div className="flex h-full flex-col items-center justify-center p-8 lg:p-12">
-        <span className="mb-4 rounded-full bg-primary/10 px-5 py-2 text-xs font-bold uppercase tracking-widest text-primary">
-          Pré-Production Meeting
-        </span>
-        <h2 className="mb-2 text-3xl font-extrabold tracking-tight text-foreground lg:text-4xl">
-          {projectTitle || "Dossier de Pré-Production"}
-        </h2>
-        {!projectTitle && metadata.summary && (
-          <p className="mb-6 max-w-lg text-center text-sm text-muted-foreground line-clamp-2">
-            {metadata.summary.split("\n")[0].replace(/\*\*/g, "")}
-          </p>
-        )}
-
-        {/* Format chips */}
-        {detected.length > 0 && (
-          <div className="mt-6 flex flex-wrap justify-center gap-3">
-            {detected.map((fmt: string) => (
-              <span key={fmt} className="rounded-full border border-primary/20 bg-primary/10 px-5 py-2 text-xs font-bold uppercase tracking-wider text-primary">
-                {fmt}
-              </span>
-            ))}
-          </div>
-        )}
-
-        {/* Stats grid */}
-        <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {videoVersions.length > 0 && (
-            <div className="flex flex-col items-center rounded-xl border border-border bg-muted/30 px-5 py-4">
-              <Film className="mb-2 h-5 w-5 text-primary" />
-              <span className="text-2xl font-black text-foreground">{videoVersions.length}</span>
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                {videoVersions.length > 1 ? "versions" : "version"} vidéo
-              </span>
-              <span className="text-[10px] text-muted-foreground">{totalSequences} séquences</span>
-            </div>
-          )}
-          {platforms.length > 0 && (
-            <div className="flex flex-col items-center rounded-xl border border-border bg-muted/30 px-5 py-4">
-              <Share2 className="mb-2 h-5 w-5 text-primary" />
-              <span className="text-2xl font-black text-foreground">{platforms.length}</span>
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">plateformes</span>
-              <span className="text-[10px] text-muted-foreground">{feedPosts.length + storiesReels.length + carousels.length} contenus</span>
-            </div>
-          )}
-          {metadata.print_format_count ? (
-            <div className="flex flex-col items-center rounded-xl border border-border bg-muted/30 px-5 py-4">
-              <Printer className="mb-2 h-5 w-5 text-primary" />
-              <span className="text-2xl font-black text-foreground">{metadata.print_format_count}</span>
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">formats print</span>
-            </div>
-          ) : null}
-          {metadata.audio_script_count ? (
-            <div className="flex flex-col items-center rounded-xl border border-border bg-muted/30 px-5 py-4">
-              <Headphones className="mb-2 h-5 w-5 text-primary" />
-              <span className="text-2xl font-black text-foreground">{metadata.audio_script_count}</span>
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">scripts audio</span>
-            </div>
-          ) : null}
-        </div>
-      </div>
-    ),
-  });
-
-  // ────────────────────────── 2. Video sections (per version) ──────────────────────────
-  for (const version of videoVersions) {
-    const { label, data } = version;
-    const storyboard = (data.storyboard || []) as R[];
-    const voiceover = data.voiceover as R | undefined;
-    const soundDesignRaw = data.sound_design as R | undefined;
-    const endCard = data.end_card as R | undefined;
-    // cutdowns removed — déclinaisons are now configured separately after masters validation
-    const versionTag = label ? ` (${label})` : "";
-
-    // Storyboard slides — 2 sequences per slide
-    if (storyboard.length > 0) {
-      const perSlide = 2;
-      for (let i = 0; i < storyboard.length; i += perSlide) {
-        const chunk = storyboard.slice(i, i + perSlide);
-        const isFirst = i === 0;
-        slides.push({
-          icon: Film,
-          title: isFirst ? `Storyboard${versionTag}` : `Séq. ${i + 1}–${i + chunk.length}${versionTag}`,
-          color: "hsl(340, 60%, 55%, 0.2)",
-          content: (
-            <div className="flex h-full flex-col overflow-y-auto p-6 lg:p-8">
-              {isFirst && (
-                <SectionHeader icon={Film} title={`Storyboard Vidéo${versionTag}`} subtitle={`${storyboard.length} séquences`} />
-              )}
-              <div className="grid flex-1 gap-5 sm:grid-cols-2">
-                {chunk.map((seq, idx) => {
-                  const seqNum = safe(seq.sequence || seq.frame_number, String(i + idx + 1));
-                  // Get per-sequence sound design if available
-                  const seqSound = soundDesignRaw?.[seqNum] as R | undefined;
-                  return (
-                    <div key={idx} className="flex flex-col rounded-xl border border-border overflow-hidden bg-card">
-                      {/* Header bar with gradient */}
-                      <div className="flex items-center justify-between bg-gradient-to-r from-primary/10 to-transparent px-5 py-3">
-                        <div className="flex items-center gap-3">
-                          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-sm font-black text-primary-foreground shadow-sm">{seqNum}</span>
-                          {(seq.timing || seq.duration) && (
-                            <span className="flex items-center gap-1 rounded-lg bg-background/80 px-2.5 py-1 text-[11px] font-semibold text-foreground">
-                              <Clock className="h-3 w-3 text-primary" /> {safe(seq.timing || seq.duration)}
-                            </span>
-                          )}
-                        </div>
-                        {seq.transition && (
-                          <span className="rounded-md bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">→ {safe(seq.transition)}</span>
-                        )}
-                      </div>
-                      <div className="flex flex-col gap-2.5 p-5 text-sm">
-                        {seq.composition && (
-                          <div className="flex items-start gap-2">
-                            <Camera className="mt-0.5 h-3.5 w-3.5 text-primary flex-shrink-0" />
-                            <span className="text-foreground font-medium">{safe(seq.composition || seq.camera)}</span>
-                          </div>
-                        )}
-                        {seq.subject && (
-                          <p className="leading-relaxed text-foreground">{safe(seq.subject)}</p>
-                        )}
-                        {seq.description && !seq.subject && (
-                          <p className="leading-relaxed text-foreground">{safe(seq.description)}</p>
-                        )}
-                        {seq.environment && (
-                          <div className="rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-                            <span className="font-semibold text-foreground">Décor :</span> {safe(seq.environment)}
-                          </div>
-                        )}
-                        {seq.motion && (
-                          <p className="text-xs text-muted-foreground"><span className="font-semibold text-foreground">Mouvement :</span> {safe(seq.motion)}</p>
-                        )}
-                        {seq.color_mood && (
-                          <p className="text-xs text-muted-foreground"><span className="font-semibold text-foreground">Palette :</span> {safe(seq.color_mood)}</p>
-                        )}
-                        {seq.text_overlay && (
-                          <div className="rounded-lg border border-dashed border-primary/30 bg-primary/5 px-3 py-2 text-xs">
-                            <span className="font-semibold text-primary">Texte :</span>{" "}
-                            <span className="text-foreground">{safe(seq.text_overlay)}</span>
-                          </div>
-                        )}
-                        {/* Inline sound cue */}
-                        {seqSound && (
-                          <div className="mt-1 flex items-start gap-2 rounded-lg bg-muted/30 px-3 py-2 text-[11px] text-muted-foreground">
-                            <Music className="mt-0.5 h-3 w-3 text-primary flex-shrink-0" />
-                            <span>{safe(seqSound.music)}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ),
-        });
+  // Enrich with composed_scenes URLs if missing
+  const composed = (metadata.composed_scenes || []) as R[];
+  if (composed.length > 0) {
+    const urlMap: Record<number, string> = {};
+    composed.forEach((s) => {
+      if (s.sequence_index != null && s.composed_image_url) {
+        urlMap[s.sequence_index] = s.composed_image_url;
       }
-    }
-
-    // Voiceover slide
-    if (voiceover) {
-      const voiceDir = voiceover.voice_direction as R | undefined;
-      slides.push({
-        icon: Mic,
-        title: `Voix-off${versionTag}`,
-        color: "hsl(270, 55%, 55%, 0.2)",
-        content: (
-          <div className="flex h-full flex-col overflow-y-auto p-6 lg:p-10">
-            <SectionHeader icon={Mic} title={`Script Voix-off${versionTag}`} subtitle={voiceover.estimated_duration ? safe(voiceover.estimated_duration) : `${safe(voiceover.word_count)} mots`} />
-            {voiceover.full_text && (
-              <div className="mb-6 rounded-xl border border-border bg-card p-6 shadow-sm">
-                <p className="whitespace-pre-line text-sm leading-[1.8] text-foreground">{safe(voiceover.full_text)}</p>
-              </div>
-            )}
-            {voiceDir && (
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                {voiceDir.gender && <InfoChip label="Genre" value={safe(voiceDir.gender)} />}
-                {voiceDir.tone && <InfoChip label="Ton" value={safe(voiceDir.tone)} accent />}
-                {voiceDir.pace && <InfoChip label="Rythme" value={safe(voiceDir.pace)} />}
-                {voiceDir.age_range && <InfoChip label="Âge" value={safe(voiceDir.age_range)} />}
-                {voiceDir.energy_curve && <InfoChip label="Énergie" value={safe(voiceDir.energy_curve)} />}
-              </div>
-            )}
-          </div>
-        ),
-      });
-    }
-
-    // Sound Design slide (per-sequence object format)
-    if (soundDesignRaw && Object.keys(soundDesignRaw).length > 0) {
-      // Convert object {1: {...}, 2: {...}} to array
-      const entries = Object.entries(soundDesignRaw)
-        .filter(([k]) => /^\d+$/.test(k))
-        .sort(([a], [b]) => Number(a) - Number(b));
-
-      if (entries.length > 0) {
-        slides.push({
-          icon: Music,
-          title: `Son${versionTag}`,
-          color: "hsl(180, 55%, 50%, 0.2)",
-          content: (
-            <div className="flex h-full flex-col overflow-y-auto p-6 lg:p-8">
-              <SectionHeader icon={Music} title={`Direction Sonore${versionTag}`} subtitle={`${entries.length} séquences`} />
-              <div className="space-y-3">
-                {entries.map(([seqNum, sd]) => {
-                  const s = sd as R;
-                  return (
-                    <div key={seqNum} className="flex items-start gap-4 rounded-xl border border-border bg-card p-4">
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-xs font-black text-primary">{seqNum}</span>
-                      <div className="flex-1 min-w-0 space-y-1.5">
-                        {s.music && <p className="text-sm text-foreground"><span className="font-semibold">Musique :</span> {safe(s.music)}</p>}
-                        {s.sfx && s.sfx !== "Aucun" && <p className="text-xs text-muted-foreground"><span className="font-semibold text-foreground">SFX :</span> {safe(s.sfx)}</p>}
-                        {s.ambiance && s.ambiance !== "Aucun." && <p className="text-xs text-muted-foreground"><span className="font-semibold text-foreground">Ambiance :</span> {safe(s.ambiance)}</p>}
-                      </div>
-                      {s.music_arc && (
-                        <span className="shrink-0 rounded-md bg-muted px-2 py-1 text-[10px] font-medium text-muted-foreground">{safe(s.music_arc)}</span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ),
-        });
+    });
+    sb.forEach((seq, i) => {
+      if (!seq.composed_image_url && urlMap[i]) {
+        seq.composed_image_url = urlMap[i];
       }
-    }
-
-    // End Card slide
-    if (endCard) {
-      slides.push({
-        icon: Clapperboard,
-        title: `End Card${versionTag}`,
-        color: "hsl(45, 70%, 50%, 0.2)",
-        content: (
-          <div className="flex h-full flex-col items-center justify-center p-8 lg:p-12">
-            <SectionHeader icon={Clapperboard} title={`Carton Final${versionTag}`} />
-            <div className="w-full max-w-lg space-y-4">
-              {endCard.product && <InfoChip label="Produit" value={safe(endCard.product)} accent />}
-              {endCard.baseline && (
-                <div className="rounded-xl border border-primary/30 bg-primary/5 p-6 text-center">
-                  <p className="text-lg font-bold text-foreground">{safe(endCard.baseline)}</p>
-                </div>
-              )}
-              <div className="grid gap-3 sm:grid-cols-2">
-                {endCard.logo && <InfoChip label="Logo" value={safe(endCard.logo)} />}
-                {endCard.cta && <InfoChip label="CTA" value={safe(endCard.cta)} />}
-                {endCard.background && <InfoChip label="Fond" value={safe(endCard.background)} />}
-              </div>
-            </div>
-          </div>
-        ),
-      });
-    }
-
-    // Cutdowns slide removed — déclinaisons configured post-masters validation
-  }
-
-  // ────────────────────────── 3. Print Specs ──────────────────────────
-  const printSpecs = metadata.print_specs as R | undefined;
-  const printFormats = (printSpecs?.formats || []) as R[];
-  if (printFormats.length > 0) {
-    slides.push({
-      icon: Printer,
-      title: "Print",
-      color: "hsl(25, 70%, 50%, 0.2)",
-      content: (
-        <div className="flex h-full flex-col overflow-y-auto p-6 lg:p-8">
-          <SectionHeader icon={Printer} title="Formats Print" subtitle={`${printFormats.length} déclinaisons`} />
-          <div className="grid flex-1 gap-4 sm:grid-cols-2">
-            {printFormats.map((fmt, i) => (
-              <div key={i} className="flex flex-col rounded-xl border border-border bg-card overflow-hidden">
-                <div className="flex items-center justify-between bg-gradient-to-r from-primary/10 to-transparent px-5 py-3">
-                  <span className="text-sm font-bold text-foreground">{safe(fmt.format_name, `Format ${i + 1}`)}</span>
-                  <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                    {fmt.aspect_ratio && <span className="rounded-md bg-muted px-2 py-0.5">{safe(fmt.aspect_ratio)}</span>}
-                    {fmt.orientation && <span className="uppercase">{safe(fmt.orientation)}</span>}
-                  </div>
-                </div>
-                <div className="flex flex-col gap-2 p-5 text-sm">
-                  {fmt.main_visual && <p className="leading-relaxed text-foreground">{safe(fmt.main_visual)}</p>}
-                  {fmt.composition_grid && (
-                    <p className="text-xs text-muted-foreground"><span className="font-semibold text-foreground">Composition :</span> {safe(fmt.composition_grid)}</p>
-                  )}
-                  {fmt.product_integration && (
-                    <p className="text-xs text-muted-foreground"><span className="font-semibold text-foreground">Produit :</span> {safe(fmt.product_integration)}</p>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ),
     });
   }
 
-  // ────────────────────────── 4. Social Specs ──────────────────────────
-  if (platforms.length > 0 || feedPosts.length > 0) {
-    // Feed posts slide
-    slides.push({
-      icon: Share2,
-      title: "Social",
-      color: "hsl(210, 70%, 55%, 0.2)",
-      content: (
-        <div className="flex h-full flex-col overflow-y-auto p-6 lg:p-8">
-          <SectionHeader icon={Share2} title="Social Media" subtitle={`${platforms.length} plateformes · ${feedPosts.length + storiesReels.length + carousels.length} contenus`} />
+  return sb;
+}
 
-          {/* Platform pills */}
-          {platforms.length > 0 && (
-            <div className="mb-6 flex flex-wrap gap-2">
-              {platforms.map((p, i) => (
-                <span key={i} className="flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-4 py-2 text-xs font-bold text-foreground">
-                  <Hash className="h-3 w-3 text-primary" />
-                  {safe(p.platform, `Plateforme ${i + 1}`)}
-                  {p.content_types && Array.isArray(p.content_types) && (
-                    <span className="text-muted-foreground">({(p.content_types as string[]).join(", ")})</span>
+/**
+ * Extract casting/characters, excluding voix-off entries.
+ * Backend sends both `casting` and `characters` arrays.
+ */
+function extractCasting(metadata: MessageMetadata): R[] {
+  const raw = (metadata.characters || metadata.casting || []) as R[];
+  if (!Array.isArray(raw)) return [];
+  // Filter out voix-off/voiceover entries — they belong in format specs
+  return raw.filter((item) => {
+    const role = safe(item.role || item.name).toLowerCase();
+    return !role.includes("voix") && !role.includes("voiceover") && !role.includes("voice-over") && !role.includes("narrateur") && !role.includes("narrator");
+  });
+}
+
+/**
+ * Extract voiceover entries from casting (for display in Formats tab).
+ */
+function extractVoiceoverFromCasting(metadata: MessageMetadata): R[] {
+  const raw = (metadata.characters || metadata.casting || []) as R[];
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((item) => {
+    const role = safe(item.role || item.name).toLowerCase();
+    return role.includes("voix") || role.includes("voiceover") || role.includes("voice-over") || role.includes("narrateur") || role.includes("narrator");
+  });
+}
+
+function extractProducts(metadata: MessageMetadata): R[] {
+  const raw = metadata.products as R[] | undefined;
+  if (!raw || !Array.isArray(raw)) return [];
+  return raw;
+}
+
+function extractLocations(metadata: MessageMetadata): R[] {
+  const raw = (metadata.locations || metadata.settings || []) as R[];
+  if (!Array.isArray(raw)) return [];
+  return raw;
+}
+
+/* ── Sub-Tab Type ── */
+type PPMSubTab = "storyboard" | "casting" | "products" | "locations" | "formats" | "summary";
+
+/* ── Storyboard Tab Content ── */
+function StoryboardTab({ storyboard }: { storyboard: R[] }) {
+  if (storyboard.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center p-8">
+        <p className="text-sm text-muted-foreground">Aucune sequence storyboard disponible.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6 p-6">
+      <SectionHeader icon={Film} title="Storyboard" subtitle={`${storyboard.length} sequences`} />
+      {storyboard.map((seq, idx) => {
+        const seqNum = safe(seq.sequence || seq.frame_number, String(idx + 1));
+        const composedUrl = seq.composed_image_url || seq.image_url;
+        return (
+          <motion.div
+            key={idx}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: idx * 0.05 }}
+            className="overflow-hidden rounded-2xl border border-border bg-card"
+          >
+            <div className="flex items-center justify-between bg-gradient-to-r from-primary/5 to-transparent px-5 py-3">
+              <div className="flex items-center gap-3">
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-sm font-black text-primary-foreground shadow-lg shadow-primary/20">
+                  {seqNum}
+                </span>
+                {(seq.timing || seq.duration) && (
+                  <span className="flex items-center gap-1 rounded-lg bg-muted px-2.5 py-1 text-[11px] font-semibold text-foreground">
+                    <Clock className="h-3 w-3 text-primary" /> {safe(seq.timing || seq.duration)}
+                  </span>
+                )}
+              </div>
+              {seq.transition && (
+                <span className="rounded-md bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+                  &rarr; {safe(seq.transition)}
+                </span>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-0 md:flex-row">
+              {/* Composed image */}
+              {composedUrl && (
+                <div className="w-full md:w-1/2">
+                  <ClickableImage
+                    src={composedUrl}
+                    alt={`Sequence ${seqNum}`}
+                    aspectClass="aspect-video"
+                    className="border-b border-border md:border-b-0 md:border-r"
+                  />
+                </div>
+              )}
+
+              {/* Text content */}
+              <div className={`flex flex-col gap-2.5 p-5 text-sm ${composedUrl ? "md:w-1/2" : "w-full"}`}>
+                {(seq.composition || seq.camera) && (
+                  <div className="flex items-start gap-2">
+                    <Camera className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-primary" />
+                    <span className="font-medium text-foreground">{safe(seq.composition || seq.camera)}</span>
+                  </div>
+                )}
+                {seq.subject && (
+                  <p className="leading-relaxed text-foreground/70">{safe(seq.subject)}</p>
+                )}
+                {seq.description && !seq.subject && (
+                  <p className="leading-relaxed text-foreground/70">{safe(seq.description)}</p>
+                )}
+                {seq.visual && !seq.subject && !seq.description && (
+                  <p className="leading-relaxed text-foreground/70">{safe(seq.visual)}</p>
+                )}
+                {seq.environment && (
+                  <div className="rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
+                    <span className="font-semibold text-foreground">Decor :</span> {safe(seq.environment)}
+                  </div>
+                )}
+                {seq.motion && (
+                  <p className="text-xs text-muted-foreground">
+                    <span className="font-semibold text-foreground">Mouvement :</span> {safe(seq.motion)}
+                  </p>
+                )}
+                {seq.color_mood && (
+                  <p className="text-xs text-muted-foreground">
+                    <span className="font-semibold text-foreground">Palette :</span> {safe(seq.color_mood)}
+                  </p>
+                )}
+                {seq.text_overlay && (
+                  <div className="rounded-lg border border-dashed border-primary/30 bg-primary/5 px-3 py-2 text-xs">
+                    <span className="font-semibold text-primary">Texte :</span>{" "}
+                    <span className="text-foreground">{safe(seq.text_overlay)}</span>
+                  </div>
+                )}
+                {seq.text_on_screen && !seq.text_overlay && (
+                  <div className="rounded-lg border border-dashed border-primary/30 bg-primary/5 px-3 py-2 text-xs">
+                    <span className="font-semibold text-primary">Texte :</span>{" "}
+                    <span className="text-foreground">{safe(seq.text_on_screen)}</span>
+                  </div>
+                )}
+                {seq.voiceover && (
+                  <p className="text-xs italic text-muted-foreground">
+                    <span className="font-semibold text-foreground/70">Voix-off :</span> {safe(seq.voiceover)}
+                  </p>
+                )}
+                {seq.sound && (
+                  <p className="text-xs text-muted-foreground">
+                    <span className="font-semibold text-foreground/70">Son :</span> {safe(seq.sound)}
+                  </p>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ── Entity Grid (Casting / Products / Locations) ── */
+function EntityGrid({
+  items,
+  icon: Icon,
+  title,
+  emptyLabel,
+  aspectClass,
+}: {
+  items: R[];
+  icon: React.ElementType;
+  title: string;
+  emptyLabel: string;
+  aspectClass?: string;
+}) {
+  if (items.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center p-8">
+        <p className="text-sm text-muted-foreground">{emptyLabel}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6">
+      <SectionHeader icon={Icon} title={title} subtitle={`${items.length} elements`} />
+      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        {items.map((item, i) => {
+          const imgUrl = item.image_url || item.thumbnail_url || item.url;
+          return (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.08 }}
+              className="group overflow-hidden rounded-2xl border border-border bg-card transition-shadow hover:shadow-lg hover:shadow-primary/5"
+            >
+              {imgUrl && (
+                <ClickableImage
+                  src={imgUrl}
+                  alt={item.name || item.role || "Entity"}
+                  aspectClass={aspectClass || "aspect-[3/4]"}
+                />
+              )}
+              <div className="p-5">
+                <h4 className="mb-1 text-base font-bold text-foreground">
+                  {safe(item.name || item.role)}
+                </h4>
+                {item.role && item.name && (
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wider text-primary">{safe(item.role)}</p>
+                )}
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  {safe(item.description || item.physical_description)}
+                </p>
+                {item.wardrobe && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    <span className="font-semibold text-foreground/70">Tenue :</span> {safe(item.wardrobe)}
+                  </p>
+                )}
+                {item.attitude && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    <span className="font-semibold text-foreground/70">Attitude :</span> {safe(item.attitude)}
+                  </p>
+                )}
+                {item.context && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    <span className="font-semibold text-foreground/70">Contexte :</span> {safe(item.context)}
+                  </p>
+                )}
+                {item.ambiance && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    <span className="font-semibold text-foreground/70">Ambiance :</span> {safe(item.ambiance)}
+                  </p>
+                )}
+                {item.lighting && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    <span className="font-semibold text-foreground/70">Lumiere :</span> {safe(item.lighting)}
+                  </p>
+                )}
+                {item.time_of_day && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    <span className="font-semibold text-foreground/70">Heure :</span> {safe(item.time_of_day)}
+                  </p>
+                )}
+              </div>
+            </motion.div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ── Formats Tab (Video, Print, Social, Audio, Digital) ── */
+function FormatsTab({ metadata, voiceoverEntries }: { metadata: MessageMetadata; voiceoverEntries: R[] }) {
+  const detected = metadata.detected_formats || [];
+  const videoSpecs = metadata.video_specs as R | undefined;
+  const printSpecs = metadata.print_specs as R | undefined;
+  const socialSpecs = metadata.social_specs as R | undefined;
+  const audioSpecs = metadata.audio_specs as R | undefined;
+  const digitalSpecs = metadata.digital_specs as R | undefined;
+
+  const hasAnyContent = detected.length > 0 || videoSpecs || printSpecs || socialSpecs || audioSpecs || digitalSpecs;
+
+  if (!hasAnyContent) {
+    return (
+      <div className="flex h-full items-center justify-center p-8">
+        <p className="text-sm text-muted-foreground">Aucune specification de format disponible.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-8 p-6">
+      <SectionHeader
+        icon={Film}
+        title="Specifications par Format"
+        subtitle={detected.length > 0 ? `${detected.length} format${detected.length > 1 ? "s" : ""} de production` : undefined}
+      />
+
+      {/* Format chips */}
+      {detected.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {detected.map((fmt: string) => (
+            <span
+              key={fmt}
+              className="rounded-full border border-primary/20 bg-primary/10 px-5 py-2 text-xs font-bold uppercase tracking-wider text-primary"
+            >
+              {fmt}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Video specs */}
+      {videoSpecs && (
+        <div className="rounded-2xl border border-border bg-card p-6">
+          <div className="mb-4 flex items-center gap-2">
+            <Film className="h-5 w-5 text-primary" />
+            <h4 className="text-base font-bold text-foreground">Video</h4>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {videoSpecs.production_notes?.total_duration && (
+              <InfoChip label="Duree" value={safe(videoSpecs.production_notes.total_duration)} accent />
+            )}
+            {videoSpecs.production_notes?.aspect_ratio && (
+              <InfoChip label="Ratio" value={safe(videoSpecs.production_notes.aspect_ratio)} />
+            )}
+            {videoSpecs.production_notes?.resolution && (
+              <InfoChip label="Resolution" value={safe(videoSpecs.production_notes.resolution)} />
+            )}
+            {videoSpecs.production_notes?.style_reference && (
+              <InfoChip label="Reference" value={safe(videoSpecs.production_notes.style_reference)} />
+            )}
+          </div>
+          {/* Voiceover from video_specs */}
+          {videoSpecs.voiceover && (
+            <div className="mt-4 rounded-xl border border-border bg-muted p-4">
+              <div className="mb-2 flex items-center gap-2">
+                <Mic className="h-4 w-4 text-primary" />
+                <span className="text-sm font-bold text-foreground">Voix-off</span>
+                {videoSpecs.voiceover.estimated_duration && (
+                  <span className="text-xs text-muted-foreground">{safe(videoSpecs.voiceover.estimated_duration)}</span>
+                )}
+              </div>
+              {videoSpecs.voiceover.full_text && (
+                <p className="whitespace-pre-line text-sm leading-relaxed text-foreground/70">
+                  {safe(videoSpecs.voiceover.full_text)}
+                </p>
+              )}
+            </div>
+          )}
+          {/* Voiceover entries from casting (moved here from Casting tab) */}
+          {voiceoverEntries.length > 0 && !videoSpecs.voiceover && (
+            <div className="mt-4 space-y-3">
+              {voiceoverEntries.map((vo, i) => (
+                <div key={i} className="rounded-xl border border-border bg-muted p-4">
+                  <div className="mb-2 flex items-center gap-2">
+                    <Mic className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-bold text-foreground">{safe(vo.name || vo.role || "Voix-off")}</span>
+                  </div>
+                  {(vo.description || vo.physical_description) && (
+                    <p className="text-sm leading-relaxed text-foreground/70">
+                      {safe(vo.description || vo.physical_description)}
+                    </p>
                   )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Print specs */}
+      {printSpecs && (printSpecs.formats as R[] | undefined)?.length > 0 && (
+        <div className="rounded-2xl border border-border bg-card p-6">
+          <div className="mb-4 flex items-center gap-2">
+            <Printer className="h-5 w-5 text-primary" />
+            <h4 className="text-base font-bold text-foreground">Print</h4>
+            <span className="text-xs text-muted-foreground">{(printSpecs.formats as R[]).length} formats</span>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {(printSpecs.formats as R[]).map((fmt, i) => (
+              <div key={i} className="rounded-xl border border-border bg-muted p-4">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-sm font-bold text-foreground">{safe(fmt.format_name, `Format ${i + 1}`)}</span>
+                  <span className="rounded-md bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+                    {safe(fmt.aspect_ratio)} {safe(fmt.orientation)}
+                  </span>
+                </div>
+                {fmt.main_visual && <p className="text-xs leading-relaxed text-muted-foreground">{safe(fmt.main_visual)}</p>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Social specs */}
+      {socialSpecs && (
+        <div className="rounded-2xl border border-border bg-card p-6">
+          <div className="mb-4 flex items-center gap-2">
+            <Share2 className="h-5 w-5 text-primary" />
+            <h4 className="text-base font-bold text-foreground">Social Media</h4>
+          </div>
+          {(socialSpecs.platforms as R[] | undefined)?.length > 0 && (
+            <div className="mb-4 flex flex-wrap gap-2">
+              {(socialSpecs.platforms as R[]).map((p, i) => (
+                <span key={i} className="rounded-full border border-border bg-muted px-3 py-1 text-xs font-medium text-foreground">
+                  {safe(p.platform)}
                 </span>
               ))}
             </div>
           )}
-
-          {/* Feed posts — improved cards */}
-          {feedPosts.length > 0 && (
-            <div className="grid gap-4 sm:grid-cols-2">
-              {feedPosts.map((post, i) => (
-                <div key={i} className="rounded-xl border border-border bg-card p-5 transition-shadow hover:shadow-md">
-                  <div className="mb-3 flex items-center gap-2">
-                    {post.platform && (
-                      <span className="rounded-lg bg-primary/10 px-2.5 py-1 text-[10px] font-bold text-primary">{safe(post.platform)}</span>
-                    )}
-                    {post.format && (
-                      <span className="rounded-md bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">{safe(post.format)}</span>
-                    )}
-                  </div>
-                  {post.visual_description && (
-                    <p className="mb-3 text-sm leading-relaxed text-foreground">{safe(post.visual_description)}</p>
-                  )}
-                  {post.caption && (
-                    <div className="rounded-lg bg-muted/50 p-3">
-                      <p className="text-xs italic leading-relaxed text-muted-foreground line-clamp-4">{safe(post.caption)}</p>
-                    </div>
-                  )}
-                  {post.cta && (
-                    <p className="mt-2 text-[10px] font-semibold uppercase text-primary">CTA : {safe(post.cta)}</p>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      ),
-    });
-
-    // Stories/Reels + Carousels slide (if any)
-    if (storiesReels.length > 0 || carousels.length > 0) {
-      slides.push({
-        icon: Tv,
-        title: "Stories & Reels",
-        color: "hsl(330, 65%, 55%, 0.2)",
-        content: (
-          <div className="flex h-full flex-col overflow-y-auto p-6 lg:p-8">
-            <SectionHeader icon={Tv} title="Stories, Reels & Carousels" subtitle={`${storiesReels.length + carousels.length} contenus`} />
-
-            {storiesReels.length > 0 && (
-              <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {storiesReels.map((sr, i) => (
-                  <div key={i} className="rounded-xl border border-border bg-card p-5">
-                    <div className="mb-3 flex items-center gap-2">
-                      <span className="rounded-lg bg-primary/10 px-2.5 py-1 text-[10px] font-bold uppercase text-primary">{safe(sr.type, "Reel")}</span>
-                      <span className="text-xs text-muted-foreground">{safe(sr.platform)}</span>
-                    </div>
-                    {sr.duration && <span className="rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">{safe(sr.duration)}</span>}
-                    {sr.concept && <p className="mt-2 text-sm text-foreground">{safe(sr.concept)}</p>}
-                    {sr.visual_description && <p className="mt-1 text-xs text-muted-foreground">{safe(sr.visual_description)}</p>}
-                  </div>
-                ))}
-              </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {(socialSpecs.feed_posts as R[] | undefined)?.length > 0 && (
+              <InfoChip label="Feed Posts" value={String((socialSpecs.feed_posts as R[]).length)} accent />
             )}
-
-            {carousels.length > 0 && (
-              <>
-                <h4 className="mb-3 flex items-center gap-2 text-sm font-bold text-foreground">
-                  <Layers className="h-4 w-4 text-primary" /> Carousels — {carousels.length}
-                </h4>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {carousels.map((car, i) => (
-                    <div key={i} className="rounded-xl border border-border bg-card p-5">
-                      <div className="mb-2 flex items-center gap-2">
-                        {car.platform && <span className="rounded-lg bg-primary/10 px-2.5 py-1 text-[10px] font-bold text-primary">{safe(car.platform)}</span>}
-                        {car.slide_count && <span className="text-xs text-muted-foreground">{safe(car.slide_count)} slides</span>}
-                      </div>
-                      {car.theme && <p className="text-sm font-medium text-foreground">{safe(car.theme)}</p>}
-                      {car.visual_description && <p className="mt-1 text-xs text-muted-foreground">{safe(car.visual_description)}</p>}
-                    </div>
-                  ))}
-                </div>
-              </>
+            {(socialSpecs.stories_reels as R[] | undefined)?.length > 0 && (
+              <InfoChip label="Stories/Reels" value={String((socialSpecs.stories_reels as R[]).length)} />
+            )}
+            {(socialSpecs.carousels as R[] | undefined)?.length > 0 && (
+              <InfoChip label="Carousels" value={String((socialSpecs.carousels as R[]).length)} />
             )}
           </div>
-        ),
-      });
-    }
-  }
+        </div>
+      )}
 
-  // ────────────────────────── 5. Audio Specs ──────────────────────────
-  const audioSpecs = metadata.audio_specs as R | undefined;
-  const audioScripts = (audioSpecs?.scripts || []) as R[];
-  const voiceDirection = audioSpecs?.voice_direction as R | undefined;
-
-  if (audioScripts.length > 0 || voiceDirection) {
-    slides.push({
-      icon: Headphones,
-      title: "Audio",
-      color: "hsl(300, 50%, 50%, 0.2)",
-      content: (
-        <div className="flex h-full flex-col overflow-y-auto p-6 lg:p-8">
-          <SectionHeader icon={Headphones} title="Production Audio" subtitle={audioScripts.length > 0 ? `${audioScripts.length} scripts` : undefined} />
-          {audioScripts.map((script, i) => (
-            <div key={i} className="mb-4 rounded-xl border border-border bg-card overflow-hidden">
-              <div className="flex items-center justify-between bg-gradient-to-r from-primary/10 to-transparent px-5 py-3">
+      {/* Audio specs */}
+      {audioSpecs && (
+        <div className="rounded-2xl border border-border bg-card p-6">
+          <div className="mb-4 flex items-center gap-2">
+            <Headphones className="h-5 w-5 text-primary" />
+            <h4 className="text-base font-bold text-foreground">Audio</h4>
+          </div>
+          {(audioSpecs.scripts as R[] | undefined)?.map((script, i) => (
+            <div key={i} className="mb-3 rounded-xl border border-border bg-muted p-4">
+              <div className="mb-2 flex items-center justify-between">
                 <span className="text-sm font-bold text-foreground">{safe(script.type, `Script ${i + 1}`)}</span>
-                {script.duration_target && <span className="rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">{safe(script.duration_target)}s</span>}
+                {script.duration_target && (
+                  <span className="text-xs text-muted-foreground">{safe(script.duration_target)}s</span>
+                )}
               </div>
               {script.full_text && (
-                <div className="p-5">
-                  <p className="whitespace-pre-line text-sm leading-[1.8] text-foreground">{safe(script.full_text)}</p>
-                </div>
+                <p className="whitespace-pre-line text-xs leading-relaxed text-muted-foreground">{safe(script.full_text)}</p>
               )}
             </div>
           ))}
-          {voiceDirection && (
+        </div>
+      )}
+
+      {/* Digital specs */}
+      {digitalSpecs && (
+        <div className="rounded-2xl border border-border bg-card p-6">
+          <div className="mb-4 flex items-center gap-2">
+            <Monitor className="h-5 w-5 text-primary" />
+            <h4 className="text-base font-bold text-foreground">Digital</h4>
+          </div>
+          {((digitalSpecs.digital as R)?.banners || digitalSpecs.banners) && (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {voiceDirection.tone && <InfoChip label="Ton" value={safe(voiceDirection.tone)} accent />}
-              {voiceDirection.gender && (
-                <InfoChip label="Voix" value={`${safe(voiceDirection.gender)}${voiceDirection.age_perceived ? `, ${safe(voiceDirection.age_perceived)}` : ""}`} />
-              )}
-              {voiceDirection.reference && <InfoChip label="Référence" value={safe(voiceDirection.reference)} />}
-            </div>
-          )}
-        </div>
-      ),
-    });
-  }
-
-  // ────────────────────────── 6. Digital Specs ──────────────────────────
-  // Handle nested { digital: { banners: [...], ... } } structure
-  const digitalInner = (digitalSpecs?.digital || digitalSpecs) as R | undefined;
-  const banners = (digitalInner?.banners || []) as R[];
-  const landingPage = digitalInner?.landing_page as R | undefined;
-
-  if (banners.length > 0 || landingPage) {
-    slides.push({
-      icon: Monitor,
-      title: "Digital",
-      color: "hsl(150, 55%, 45%, 0.2)",
-      content: (
-        <div className="flex h-full flex-col overflow-y-auto p-6 lg:p-8">
-          <SectionHeader icon={Monitor} title="Production Digital" />
-          {banners.length > 0 && (
-            <>
-              <h4 className="mb-3 text-sm font-bold text-foreground">Bannières — {banners.length} formats</h4>
-              <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {banners.slice(0, 6).map((b, i) => (
-                  <div key={i} className="rounded-xl border border-border bg-card p-4">
-                    <div className="mb-2 flex items-center justify-between">
-                      <span className="text-xs font-bold text-foreground">{safe(b.format_name, `Banner ${i + 1}`)}</span>
-                      {b.dimensions && <span className="rounded-md bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">{safe(b.dimensions)}</span>}
-                    </div>
-                    {b.headline && <p className="text-sm font-medium text-primary">{safe(b.headline)}</p>}
-                    {b.main_visual && <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{safe(b.main_visual)}</p>}
+              {(((digitalSpecs.digital as R)?.banners || digitalSpecs.banners) as R[]).slice(0, 6).map((b, i) => (
+                <div key={i} className="rounded-xl border border-border bg-muted p-3">
+                  <div className="mb-1 flex items-center justify-between">
+                    <span className="text-xs font-bold text-foreground">{safe(b.format_name, `Banner ${i + 1}`)}</span>
+                    {b.dimensions && <span className="text-[10px] text-muted-foreground">{safe(b.dimensions)}</span>}
                   </div>
-                ))}
-              </div>
-            </>
-          )}
-          {landingPage && (
-            <div className="rounded-xl border border-border bg-card p-6">
-              <div className="mb-3 flex items-center gap-2">
-                <Layout className="h-4 w-4 text-primary" />
-                <h4 className="text-sm font-bold text-foreground">Landing Page</h4>
-              </div>
-              {(landingPage.hero_section as R | undefined) && (
-                <div className="mb-3">
-                  <p className="text-sm font-medium text-foreground">{safe((landingPage.hero_section as R).headline)}</p>
-                  {(landingPage.hero_section as R).subheadline && (
-                    <p className="text-xs text-muted-foreground">{safe((landingPage.hero_section as R).subheadline)}</p>
-                  )}
+                  {b.headline && <p className="text-xs font-medium text-primary">{safe(b.headline)}</p>}
                 </div>
-              )}
-              {landingPage.sections && Array.isArray(landingPage.sections) && (
-                <p className="text-xs text-muted-foreground">{(landingPage.sections as unknown[]).length} sections</p>
-              )}
+              ))}
             </div>
           )}
         </div>
-      ),
-    });
-  }
-
-  // ────────────────────────── 7. Summary / Markdown slide ──────────────────────────
-  if (metadata.summary) {
-    slides.push({
-      icon: FileText,
-      title: "Résumé",
-      color: "hsl(220, 50%, 50%, 0.2)",
-      content: (
-        <div className="flex h-full flex-col overflow-y-auto p-6 lg:p-10">
-          <SectionHeader icon={FileText} title="Résumé Complet" />
-          <div className="prose prose-sm max-w-none dark:prose-invert prose-headings:text-foreground prose-p:text-muted-foreground prose-strong:text-foreground prose-li:text-muted-foreground prose-ul:my-1 prose-li:my-0.5">
-            <ReactMarkdown>{metadata.summary}</ReactMarkdown>
-          </div>
-        </div>
-      ),
-    });
-  }
-
-  // ────────────────────────── Legacy: Casting ──────────────────────────
-  if (metadata.casting && metadata.casting.length > 0) {
-    slides.push({
-      icon: Users,
-      title: "Casting",
-      color: "hsl(160, 60%, 45%, 0.2)",
-      content: (
-        <div className="flex h-full flex-col overflow-y-auto p-6 lg:p-8">
-          <SectionHeader icon={Users} title="Casting" />
-          <div className="grid flex-1 gap-4 sm:grid-cols-2">
-            {metadata.casting!.map((c, i) => (
-              <div key={i} className="rounded-xl border border-border bg-card p-6">
-                <h4 className="mb-2 text-base font-bold text-foreground">{c.role}</h4>
-                <p className="text-sm leading-relaxed text-muted-foreground">{c.description}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      ),
-    });
-  }
-
-  // ────────────────────────── Legacy: Décors ──────────────────────────
-  if (metadata.settings && metadata.settings.length > 0) {
-    slides.push({
-      icon: MapPin,
-      title: "Décors",
-      color: "hsl(30, 70%, 50%, 0.2)",
-      content: (
-        <div className="flex h-full flex-col overflow-y-auto p-6 lg:p-8">
-          <SectionHeader icon={MapPin} title="Décors" />
-          <div className="grid flex-1 gap-4 sm:grid-cols-2">
-            {metadata.settings!.map((s, i) => (
-              <div key={i} className="rounded-xl border border-border bg-card p-6">
-                <h4 className="mb-2 text-base font-bold text-foreground">{s.name}</h4>
-                <p className="text-sm leading-relaxed text-muted-foreground">{s.description}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      ),
-    });
-  }
-
-  // ────────────────────────── Legacy: Production notes ──────────────────────────
-  if (metadata.production_notes && (metadata.production_notes.budget_range || metadata.production_notes.timeline)) {
-    slides.push({
-      icon: Wrench,
-      title: "Production",
-      color: "hsl(200, 60%, 50%, 0.2)",
-      content: (
-        <div className="flex h-full flex-col items-center justify-center p-8 lg:p-12">
-          <div className="w-full max-w-xl space-y-6">
-            <SectionHeader icon={Wrench} title="Notes de Production" />
-            {metadata.production_notes.budget_range && <InfoChip label="Budget" value={metadata.production_notes.budget_range} accent />}
-            {metadata.production_notes.timeline && <InfoChip label="Planning" value={metadata.production_notes.timeline} />}
-          </div>
-        </div>
-      ),
-    });
-  }
-
-  // ────────────────────────── Legacy: Maquettes ──────────────────────────
-  if (metadata.mockups && metadata.mockups.length > 0) {
-    slides.push({
-      icon: Image,
-      title: "Maquettes",
-      color: "hsl(280, 60%, 55%, 0.2)",
-      content: (
-        <div className="flex h-full flex-col overflow-y-auto p-6 lg:p-8">
-          <SectionHeader icon={Image} title="Maquettes" />
-          <div className="grid flex-1 gap-4 sm:grid-cols-2">
-            {metadata.mockups!.map((m, i) => (
-              <div key={i} className="rounded-xl border border-border bg-card p-6">
-                <span className="mb-3 inline-block rounded-lg bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-                  {m.format}
-                </span>
-                <p className="text-sm leading-relaxed text-foreground">{m.description}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      ),
-    });
-  }
-
-  return slides;
+      )}
+    </div>
+  );
 }
 
-/* ─── PPM Approval Footer ─── */
-function PPMApprovalFooter({ projectId }: { projectId: string }) {
+/* ── Summary Tab ── */
+function SummaryTab({ metadata }: { metadata: MessageMetadata }) {
+  const videoSpecs = metadata.video_specs as R | undefined;
+  const hasSummary = !!metadata.summary;
+  const hasProductionNotes = metadata.production_notes && (metadata.production_notes.budget_range || metadata.production_notes.timeline);
+  const hasMockups = metadata.mockups && metadata.mockups.length > 0;
+  const hasStats = metadata.storyboard_count || metadata.casting_count || metadata.settings_count || metadata.mockup_count;
+
+  if (!hasSummary && !hasProductionNotes && !hasMockups && !hasStats) {
+    return (
+      <div className="flex h-full items-center justify-center p-8">
+        <p className="text-sm text-muted-foreground">Aucun resume disponible.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6 space-y-8">
+      {/* Summary text */}
+      {hasSummary && (
+        <div>
+          <SectionHeader icon={FileText} title="Resume Complet" />
+          <div className="prose prose-sm max-w-none prose-headings:text-foreground prose-p:text-muted-foreground prose-strong:text-foreground prose-li:text-muted-foreground prose-ul:my-1 prose-li:my-0.5">
+            <ReactMarkdown>{metadata.summary!}</ReactMarkdown>
+          </div>
+        </div>
+      )}
+
+      {/* Stats overview */}
+      {hasStats && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {metadata.storyboard_count && (
+            <InfoChip label="Storyboard" value={`${metadata.storyboard_count} frames`} accent />
+          )}
+          {metadata.casting_count && (
+            <InfoChip label="Casting" value={`${metadata.casting_count} roles`} />
+          )}
+          {metadata.settings_count && (
+            <InfoChip label="Decors" value={`${metadata.settings_count} lieux`} />
+          )}
+          {metadata.mockup_count && (
+            <InfoChip label="Maquettes" value={`${metadata.mockup_count} formats`} />
+          )}
+        </div>
+      )}
+
+      {/* Production notes */}
+      {hasProductionNotes && (
+        <div className="space-y-4">
+          <h4 className="flex items-center gap-2 text-sm font-bold text-foreground">
+            <Package className="h-4 w-4 text-primary" /> Notes de Production
+          </h4>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {metadata.production_notes!.budget_range && (
+              <InfoChip label="Budget" value={metadata.production_notes!.budget_range} accent />
+            )}
+            {metadata.production_notes!.timeline && (
+              <InfoChip label="Planning" value={metadata.production_notes!.timeline} />
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Mockups */}
+      {hasMockups && (
+        <div className="space-y-4">
+          <h4 className="flex items-center gap-2 text-sm font-bold text-foreground">
+            <Layout className="h-4 w-4 text-primary" /> Maquettes
+          </h4>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {metadata.mockups!.map((m, i) => (
+              <div key={i} className="rounded-xl border border-border bg-muted p-4">
+                <span className="mb-2 inline-block rounded-md bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+                  {m.format}
+                </span>
+                <p className="text-sm leading-relaxed text-muted-foreground">{m.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── PPM Approval Footer ── */
+function PPMApprovalFooter({
+  projectId,
+  onPPMApprove,
+}: {
+  projectId: string;
+  onPPMApprove?: (action: "approve" | "revision", feedback?: string) => Promise<void>;
+}) {
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [loading, setLoading] = useState(false);
@@ -718,9 +741,13 @@ function PPMApprovalFooter({ projectId }: { projectId: string }) {
   const handleApprove = async () => {
     setLoading(true);
     try {
-      await approvePPMGate(projectId, "approve");
+      if (onPPMApprove) {
+        await onPPMApprove("approve");
+      } else {
+        await approvePPMGate(projectId, "approve");
+      }
       setSubmitted("approved");
-      toast.success("PPM approuvé avec succès");
+      toast.success("PPM approuve - lancement de la production");
     } catch {
       toast.error("Erreur lors de l'approbation du PPM");
     } finally {
@@ -732,9 +759,13 @@ function PPMApprovalFooter({ projectId }: { projectId: string }) {
     if (!feedback.trim()) return;
     setLoading(true);
     try {
-      await approvePPMGate(projectId, "revision", feedback.trim());
+      if (onPPMApprove) {
+        await onPPMApprove("revision", feedback.trim());
+      } else {
+        await approvePPMGate(projectId, "revision", feedback.trim());
+      }
       setSubmitted("revision");
-      toast.success("Modifications demandées");
+      toast.success("Modifications demandees");
     } catch {
       toast.error("Erreur lors de l'envoi des modifications");
     } finally {
@@ -744,13 +775,13 @@ function PPMApprovalFooter({ projectId }: { projectId: string }) {
 
   if (submitted) {
     return (
-      <div className="border-t border-border bg-card/60 px-6 py-4">
+      <div className="border-t border-border bg-card/80 px-6 py-4">
         <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
           <CheckCircle2 className="h-4 w-4 text-primary" />
-          {submitted === "approved" ? "PPM approuvé" : "Modifications demandées"}
+          {submitted === "approved" ? "PPM approuve" : "Modifications demandees"}
         </div>
         {submitted === "revision" && feedback && (
-          <div className="mt-2 rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+          <div className="mt-2 rounded-lg border border-border bg-muted px-4 py-3 text-sm text-muted-foreground">
             {feedback}
           </div>
         )}
@@ -759,20 +790,20 @@ function PPMApprovalFooter({ projectId }: { projectId: string }) {
   }
 
   return (
-    <div className="border-t border-border bg-card/60 px-6 py-4">
+    <div className="border-t border-border bg-card/80 px-6 py-4">
       {showFeedback ? (
         <div className="space-y-3">
           <textarea
             value={feedback}
             onChange={(e) => setFeedback(e.target.value)}
-            placeholder="Décrivez les modifications souhaitées..."
-            className="h-24 w-full resize-none rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+            placeholder="Decrivez les modifications souhaitees..."
+            className="h-24 w-full resize-none rounded-xl border border-border bg-muted px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/50"
           />
           <div className="flex gap-3">
             <button
               onClick={handleRevision}
               disabled={!feedback.trim() || loading}
-              className="flex items-center gap-2 rounded-lg bg-destructive px-5 py-2.5 text-sm font-semibold text-destructive-foreground transition-colors hover:bg-destructive/90 disabled:opacity-50"
+              className="flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary disabled:opacity-50"
             >
               {loading && <Loader2 className="h-4 w-4 animate-spin" />}
               Envoyer les modifications
@@ -791,7 +822,7 @@ function PPMApprovalFooter({ projectId }: { projectId: string }) {
           <button
             onClick={handleApprove}
             disabled={loading}
-            className="flex items-center gap-2 rounded-lg bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 hover:shadow-md disabled:opacity-50"
+            className="flex items-center gap-2 rounded-lg bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary hover:shadow-lg hover:shadow-primary/20 disabled:opacity-50"
           >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
             Approuver le PPM
@@ -809,26 +840,203 @@ function PPMApprovalFooter({ projectId }: { projectId: string }) {
   );
 }
 
-/* ─── Main Component ─── */
-const PPMPresentation = ({ metadata, projectId, currentStep }: Props) => {
-  const slides = useMemo(() => buildSlides(metadata), [metadata]);
+/* ── Download/View Buttons Bar ── */
+function PPMActionBar({ metadata }: { metadata: MessageMetadata }) {
+  const pptxUrl = metadata.pptx_url;
+  const slidesUrl = metadata.slides_url;
+  const pptxUrls = (metadata as R).pptx_urls as Record<string, string> | undefined;
+  const slidesUrls = (metadata as R).slides_urls as Record<string, string> | undefined;
 
-  // Hide approval footer once pipeline has moved past PPM (prod, delivery, etc.)
-  const PAST_PPM_STEPS = new Set(["prod", "prod_image", "prod_video", "prod_audio", "delivery", "delivered", "livré"]);
-  const showApproval = projectId && !PAST_PPM_STEPS.has(currentStep || "");
+  // Collect all available channel-specific URLs
+  const channels = Object.keys(pptxUrls || slidesUrls || {});
+  const hasMultipleChannels = channels.length > 1;
+
+  // If no URLs at all, don't render
+  if (!pptxUrl && !slidesUrl && channels.length === 0) return null;
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex-1 overflow-hidden">
-        <SlideShell
-          slides={slides}
-          title="Dossier PPM"
-          titleIcon={FileText}
-          slidesUrl={metadata.slides_url}
-          pptxUrl={metadata.pptx_url}
-        />
+    <div className="flex flex-wrap items-center gap-2 border-b border-border bg-card/60 px-6 py-3">
+      {/* Primary buttons (first/main URLs) */}
+      {slidesUrl && (
+        <a
+          href={slidesUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-muted px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted/80"
+        >
+          <ExternalLink className="h-3 w-3" /> Voir les slides
+        </a>
+      )}
+      {pptxUrl && (
+        <a
+          href={pptxUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-muted px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted/80"
+        >
+          <Download className="h-3 w-3" /> PPTX
+        </a>
+      )}
+
+      {/* Per-channel buttons if multiple channels */}
+      {hasMultipleChannels && channels.map((ch) => {
+        const chPptx = pptxUrls?.[ch];
+        const chSlides = slidesUrls?.[ch];
+        return (
+          <div key={ch} className="flex items-center gap-1">
+            <span className="rounded-md bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary">
+              {ch}
+            </span>
+            {chSlides && (
+              <a
+                href={chSlides}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 rounded-md bg-muted/60 px-2 py-1 text-[10px] font-medium text-foreground/70 transition-colors hover:bg-muted/80 hover:text-foreground"
+              >
+                <ExternalLink className="h-2.5 w-2.5" /> Slides
+              </a>
+            )}
+            {chPptx && (
+              <a
+                href={chPptx}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 rounded-md bg-muted/60 px-2 py-1 text-[10px] font-medium text-foreground/70 transition-colors hover:bg-muted/80 hover:text-foreground"
+              >
+                <Download className="h-2.5 w-2.5" /> PPTX
+              </a>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ── Main Component ── */
+const PPMPresentation = ({ metadata, projectId, currentStep, onPPMApprove }: Props) => {
+  // Extract data using robust helpers
+  const storyboard = useMemo(() => extractStoryboard(metadata), [metadata]);
+  const characters = useMemo(() => extractCasting(metadata), [metadata]);
+  const voiceoverEntries = useMemo(() => extractVoiceoverFromCasting(metadata), [metadata]);
+  const products = useMemo(() => extractProducts(metadata), [metadata]);
+  const locations = useMemo(() => extractLocations(metadata), [metadata]);
+  const detected = metadata.detected_formats || [];
+  const videoSpecs = metadata.video_specs as R | undefined;
+  const hasFormats = detected.length > 0 || !!videoSpecs || !!metadata.print_specs || !!metadata.social_specs || !!metadata.audio_specs || !!metadata.digital_specs;
+
+  const [activeTab, setActiveTab] = useState<PPMSubTab>("storyboard");
+
+  // Build tabs list — always show Storyboard and Summary; show others when data exists
+  const tabs = useMemo(() => {
+    const t: { id: PPMSubTab; label: string; icon: React.ElementType; count?: number }[] = [];
+    t.push({ id: "storyboard", label: "Storyboard", icon: Film, count: storyboard.length || undefined });
+    if (characters.length > 0) {
+      t.push({ id: "casting", label: "Casting", icon: Users, count: characters.length });
+    }
+    if (products.length > 0) {
+      t.push({ id: "products", label: "Produits", icon: Package, count: products.length });
+    }
+    if (locations.length > 0) {
+      t.push({ id: "locations", label: "Decors", icon: MapPin, count: locations.length });
+    }
+    if (hasFormats) {
+      t.push({ id: "formats", label: "Formats", icon: Layers });
+    }
+    t.push({ id: "summary", label: "Resume", icon: FileText });
+    return t;
+  }, [characters.length, products.length, locations.length, storyboard.length, hasFormats]);
+
+  // Hide approval footer once pipeline has moved past PPM
+  const PAST_PPM_STEPS = new Set(["prod", "prod_image", "prod_video", "prod_audio", "delivery", "delivered", "livre"]);
+  const showApproval = projectId && !PAST_PPM_STEPS.has(currentStep || "");
+
+  const projectTitle = videoSpecs?.project_title || metadata.campaign_title || "";
+
+  return (
+    <div className="flex h-full flex-col bg-background">
+      {/* Header */}
+      <div className="border-b border-border px-6 py-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15">
+            <FileText className="h-5 w-5 text-primary" />
+          </div>
+          <div className="flex-1">
+            <h2 className="text-lg font-bold tracking-tight text-foreground">
+              {projectTitle || "Dossier PPM"}
+            </h2>
+            <p className="text-xs text-muted-foreground">Pre-Production Meeting</p>
+          </div>
+        </div>
       </div>
-      {showApproval && <PPMApprovalFooter projectId={projectId} />}
+
+      {/* Action bar: download PPTX, view slides */}
+      <PPMActionBar metadata={metadata} />
+
+      {/* Sub-tabs */}
+      <div className="flex gap-1 overflow-x-auto border-b border-border px-4 py-2 scrollbar-thin">
+        {tabs.map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-bold uppercase tracking-wider transition-all ${
+                isActive
+                  ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              }`}
+            >
+              <Icon className="h-3.5 w-3.5" />
+              {tab.label}
+              {tab.count !== undefined && (
+                <span className={`ml-0.5 text-[10px] ${isActive ? "text-primary-foreground/70" : "text-muted-foreground/60"}`}>
+                  ({tab.count})
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto">
+        {activeTab === "storyboard" && <StoryboardTab storyboard={storyboard} />}
+        {activeTab === "casting" && (
+          <EntityGrid
+            items={characters}
+            icon={Users}
+            title="Casting / Personnages"
+            emptyLabel="Aucun personnage defini."
+            aspectClass="aspect-[3/4]"
+          />
+        )}
+        {activeTab === "products" && (
+          <EntityGrid
+            items={products}
+            icon={Package}
+            title="Produits / Objets"
+            emptyLabel="Aucun produit defini."
+            aspectClass="aspect-square"
+          />
+        )}
+        {activeTab === "locations" && (
+          <EntityGrid
+            items={locations}
+            icon={MapPin}
+            title="Decors / Lieux"
+            emptyLabel="Aucun decor defini."
+            aspectClass="aspect-video"
+          />
+        )}
+        {activeTab === "formats" && <FormatsTab metadata={metadata} voiceoverEntries={voiceoverEntries} />}
+        {activeTab === "summary" && <SummaryTab metadata={metadata} />}
+      </div>
+
+      {/* Approval footer */}
+      {showApproval && <PPMApprovalFooter projectId={projectId!} onPPMApprove={onPPMApprove} />}
     </div>
   );
 };

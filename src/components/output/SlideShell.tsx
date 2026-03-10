@@ -14,7 +14,7 @@ import type { LucideIcon } from "lucide-react";
 
 /* ─── Types ─── */
 export interface SlideItem {
-  icon: LucideIcon;
+  icon?: LucideIcon;
   title: string;
   color?: string; // hsl accent for thumbnail gradient
   content: ReactNode;
@@ -115,7 +115,13 @@ function Thumbnails({
               <div className="absolute inset-0 bg-muted" />
             )}
             <div className="relative z-10 flex flex-col items-center gap-1">
-              <Icon className={`h-4 w-4 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
+              {Icon ? (
+                <Icon className={`h-4 w-4 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
+              ) : (
+                <span className={`text-xs font-bold tabular-nums ${isActive ? "text-primary" : "text-muted-foreground"}`}>
+                  {i + 1}
+                </span>
+              )}
               <span className="text-[9px] font-semibold leading-tight text-center px-1 truncate w-full text-foreground">
                 {s.title}
               </span>

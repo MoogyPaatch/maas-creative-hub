@@ -7,6 +7,7 @@ import PPMPresentation from "./PPMPresentation";
 import CampaignGallery from "./CampaignGallery";
 import CreativeCanvas from "./CreativeCanvas";
 import DeclinaisonConfigurator from "./DeclinaisonConfigurator";
+import MastersReview from "./MastersReview";
 import ValidationPanel from "./ValidationPanel";
 import BrandAssetsPanel from "./BrandAssetsPanel";
 import DeliveryPanel from "./DeliveryPanel";
@@ -26,6 +27,7 @@ interface Props {
   onSelectPiste?: (pisteId: string) => void;
   onApprove?: (id: string, feedback: string | null) => void;
   onReject?: (id: string, feedback: string) => void;
+  onPPMApprove?: (action: "approve" | "revision", feedback?: string) => Promise<void>;
   onLaunchDeclinaisons?: (config: Record<string, Record<string, boolean>>) => void;
   onSkipDeclinaisons?: () => void;
   brandAssets?: BrandAsset[];
@@ -74,7 +76,7 @@ const emptyStateByStep: Record<string, { icon: React.ElementType; title: string;
 const OutputPanel = ({
   artifacts, briefData, messages = [],
   clientBriefDraft, changedBriefFields, onClientBriefFieldChange, onValidateClientBrief,
-  onSelectPiste, onApprove, onReject, onLaunchDeclinaisons, onSkipDeclinaisons,
+  onSelectPiste, onApprove, onReject, onPPMApprove, onLaunchDeclinaisons, onSkipDeclinaisons,
   brandAssets = [], onBrandAssetsChange, highlightAssetCategories,
   showAssetsTab = true, onBriefChange, currentStep, isClientView = false, isStreaming = false, isValidatingBrief = false,
   projectId, forceAssetsSignal, onAssetUploadComplete,
@@ -194,6 +196,7 @@ const OutputPanel = ({
     dc_copy_result: { label: "Copy", icon: PenTool },
     ppm_presentation: { label: "PPM", icon: Film },
     campaign_gallery: { label: "Campagne", icon: ImageIcon },
+    masters_review: { label: "Masters", icon: Package },
     declinaison_configurator: { label: "Declinaisons", icon: Settings2 },
     validation_required: { label: "Validation" },
     delivery: { label: "Livraison", icon: Package },
@@ -237,10 +240,13 @@ const OutputPanel = ({
               <DCCopyResult metadata={active.metadata} />
             )}
             {active?.type === "ppm_presentation" && active.metadata && (
-              <PPMPresentation metadata={active.metadata} projectId={projectId} currentStep={currentStep} />
+              <PPMPresentation metadata={active.metadata} projectId={projectId} currentStep={currentStep} onPPMApprove={onPPMApprove} />
             )}
             {active?.type === "campaign_gallery" && active.metadata && (
               <CampaignGallery metadata={active.metadata} onOpenCanvas={() => setActiveTab("canvas")} />
+            )}
+            {active?.type === "masters_review" && active.metadata && onApprove && onReject && (
+              <MastersReview metadata={active.metadata} onApprove={onApprove} onReject={onReject} />
             )}
             {active?.type === "declinaison_configurator" && active.metadata && onLaunchDeclinaisons && onSkipDeclinaisons && (
               <DeclinaisonConfigurator metadata={active.metadata} onLaunch={onLaunchDeclinaisons} onSkip={onSkipDeclinaisons} />

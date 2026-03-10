@@ -1,9 +1,23 @@
 import type { ChatMessage, QuickReply, ClientBriefDraft } from "@/types";
 
+/** Structured thinking event from backend */
+export interface ThinkingEvent {
+  /** Human-readable task label (e.g., "Recherche : Marque & Produit...") */
+  label: string;
+  /** Stable display name for the agent phase (e.g., "Planner Strategique") */
+  agentName: string;
+  /** 1-based index of this task within the agent phase */
+  taskIndex: number;
+  /** Total number of tasks in the agent phase */
+  taskTotal: number;
+  /** Progress percentage 0-100, monotonically increasing within a phase */
+  progress: number;
+}
+
 export interface SSECallbacks {
   onMessage: (msg: ChatMessage) => void;
   onDone?: () => void;
-  onThinking?: (label: string) => void;
+  onThinking?: (event: ThinkingEvent) => void;
   onBriefDraft?: (draft: Partial<ClientBriefDraft>) => void;
   onActionRequired?: (action: string, options?: string[], validationData?: any) => void;
   onTimeout?: () => void;
@@ -13,7 +27,7 @@ export async function parseSSEStream(
   stream: ReadableStream<Uint8Array>,
   onMessage: (msg: ChatMessage) => void,
   onDone?: () => void,
-  onThinking?: (label: string) => void,
+  onThinking?: (event: ThinkingEvent) => void,
   onBriefDraft?: (draft: Partial<ClientBriefDraft>) => void,
   onActionRequired?: (action: string, options?: string[], validationData?: any) => void,
   onTimeout?: () => void
@@ -43,16 +57,28 @@ export async function parseSSEStream(
               continue;
             }
 
-            // Thinking indicator
+            // Thinking indicator (structured)
             if (data.role === "thinking" && onThinking) {
-              onThinking(data.content || "Traitement en cours...");
+              onThinking({
+                label: data.content || "Traitement en cours...",
+                agentName: data.agent_name || "",
+                taskIndex: data.task_index || 0,
+                taskTotal: data.task_total || 0,
+                progress: data.progress || 0,
+              });
               continue;
             }
 
-            // Status update → route to thinking or let completed fall through
+            // Status update -> route to thinking or let completed fall through
             if (data.metadata?.type === "status_update") {
               if (data.metadata?.status === "working" && data.metadata?.phase_label) {
-                onThinking?.(data.metadata.phase_label);
+                onThinking?.({
+                  label: data.metadata.phase_label,
+                  agentName: "",
+                  taskIndex: 0,
+                  taskTotal: 0,
+                  progress: 0,
+                });
                 continue;
               }
               if (data.metadata?.status === "completed") {
@@ -60,7 +86,7 @@ export async function parseSSEStream(
               }
             }
 
-            // action_required → handle user choices/validation
+            // action_required -> handle user choices/validation
             if (data.metadata?.type === "action_required") {
               onActionRequired?.(
                 data.metadata.action,
@@ -71,7 +97,7 @@ export async function parseSSEStream(
                 id: `action_${idx}`,
                 label: option
               })) || [];
-              
+
               onMessage({
                 role: "agent",
                 content: data.content || data.metadata.message || "",
@@ -117,7 +143,7 @@ export async function parseSSEStream(
     if (messageCount === 0) {
       onMessage({
         role: "agent",
-        content: "La connexion a été interrompue. Veuillez renvoyer votre message.",
+        content: "La connexion a ete interrompue. Veuillez renvoyer votre message.",
         timestamp: new Date(),
       });
     }

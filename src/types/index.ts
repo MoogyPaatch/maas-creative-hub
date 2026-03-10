@@ -145,13 +145,36 @@ export interface ChatMessageMetadata {
   settings_count?: number;
   mockup_count?: number;
   summary?: string;
-  storyboard?: Array<{ frame_number: number; description: string; duration: string; camera: string }>;
-  casting?: Array<{ role: string; description: string }>;
-  settings?: Array<{ name: string; description: string }>;
+  storyboard?: Array<{ frame_number: number; description: string; duration: string; camera: string; composed_image_url?: string; [key: string]: any }>;
+  casting?: Array<{ role: string; description: string; image_url?: string; name?: string; wardrobe?: string; attitude?: string; physical_description?: string; [key: string]: any }>;
+  settings?: Array<{ name: string; description: string; image_url?: string; ambiance?: string; lighting?: string; time_of_day?: string; [key: string]: any }>;
   production_notes?: { budget_range: string; timeline: string };
   mockups?: Array<{ format: string; description: string }>;
+  // PPM format specs
+  detected_formats?: string[];
+  video_specs?: Record<string, any>;
+  print_specs?: Record<string, any>;
+  social_specs?: Record<string, any>;
+  audio_specs?: Record<string, any>;
+  digital_specs?: Record<string, any>;
+  pptx_urls?: Record<string, string>;
+  slides_urls?: Record<string, string>;
+  // Visual entity library (PPM restructuration)
+  characters?: Array<{ name: string; role: string; description: string; wardrobe?: string; attitude?: string; image_url?: string; [key: string]: any }>;
+  products?: Array<{ name: string; description: string; context?: string; image_url?: string; [key: string]: any }>;
+  locations?: Array<{ name: string; description: string; ambiance?: string; lighting?: string; time_of_day?: string; image_url?: string; [key: string]: any }>;
+  composed_scenes?: Array<{ sequence_index: number; composed_image_url?: string; description?: string; [key: string]: any }>;
   gate?: string;
   validation_id?: string;
+  // masters_review fields
+  channels?: Record<string, {
+    asset_ids: string[];
+    urls?: string[];
+    assembled_url?: string;
+    url?: string;
+    duration?: number;
+    description: string;
+  }>;
   production_assets?: ProductionAsset[];
   media_types?: string[];
   asset_count?: number;
@@ -230,7 +253,7 @@ export interface CanvasElement {
   color?: string;
 }
 
-export type BrandAssetCategory = "logo" | "font" | "guideline" | "reference" | "product" | "other";
+export type BrandAssetCategory = "logo" | "font" | "guideline" | "reference" | "product" | "packaging" | "character" | "talent" | "location" | "venue" | "decor" | "other";
 
 export interface BrandAsset {
   id: string;

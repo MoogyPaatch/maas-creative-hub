@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Image, Package, FileText, Type, Palette, Upload, X, Loader2 } from "lucide-react";
+import { Image, Package, FileText, Type, Palette, Upload, X, Loader2, Users, MapPin, BoxSelect } from "lucide-react";
 import type { BrandAsset, BrandAssetCategory } from "@/types";
 import { uploadFile, mapBrandAsset } from "@/lib/api";
 import { toast } from "sonner";
@@ -14,12 +14,29 @@ interface Props {
   onUploadComplete?: (filename: string) => void;
 }
 
-const CATEGORIES: { key: BrandAssetCategory; label: string; icon: React.ElementType; description: string }[] = [
-  { key: "logo", label: "Logos", icon: Image, description: "SVG, PNG, AI — toutes declinaisons" },
-  { key: "product", label: "Visuels produit", icon: Package, description: "Packshots, photos ambiance" },
-  { key: "guideline", label: "Charte graphique", icon: FileText, description: "PDF, guidelines, DA" },
-  { key: "font", label: "Typographies", icon: Type, description: "OTF, TTF, WOFF" },
-  { key: "other", label: "Autres", icon: Palette, description: "Patterns, textures, pictos, divers" },
+type CategoryItem = { key: BrandAssetCategory; label: string; icon: React.ElementType; description: string };
+type CategoryGroup = { title: string; subtitle?: string; items: CategoryItem[] };
+
+const CATEGORY_GROUPS: CategoryGroup[] = [
+  {
+    title: "Identite de marque",
+    items: [
+      { key: "logo", label: "Logos", icon: Image, description: "SVG, PNG, AI — toutes declinaisons" },
+      { key: "guideline", label: "Charte graphique", icon: FileText, description: "PDF, guidelines, DA" },
+      { key: "font", label: "Typographies", icon: Type, description: "OTF, TTF, WOFF" },
+      { key: "packaging", label: "Packaging", icon: BoxSelect, description: "Emballages, PLV, presentoirs" },
+    ],
+  },
+  {
+    title: "References campagne",
+    subtitle: "Optionnel — sinon notre IA generera des propositions",
+    items: [
+      { key: "product", label: "Visuels produit", icon: Package, description: "Packshots, photos ambiance" },
+      { key: "character", label: "Personnages / Casting", icon: Users, description: "Photos talent, egeries, portraits casting" },
+      { key: "location", label: "Lieux / Decors", icon: MapPin, description: "Photos lieux, decors, ambiances spatiales" },
+      { key: "other", label: "Autres inspirations", icon: Palette, description: "Moodboards, references, textures, divers" },
+    ],
+  },
 ];
 
 const BrandAssetsPanel = ({ assets, onAssetsChange, highlightCategories, projectId, onUploadComplete }: Props) => {
@@ -55,8 +72,18 @@ const BrandAssetsPanel = ({ assets, onAssetsChange, highlightCategories, project
     }
   }, [assets, onAssetsChange, projectId]);
 
-  const handleRemove = useCallback((id: string) => {
+  const handleRemove = useCallback(async (id: string) => {
     onAssetsChange(assets.filter((a) => a.id !== id));
+    try {
+      const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8001/api";
+      const token = localStorage.getItem("maas_token");
+      await fetch(`${API_URL}/brand-assets/${id}`, {
+        method: "DELETE",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+    } catch {
+      // Optimistic removal already done — backend delete is best-effort
+    }
   }, [assets, onAssetsChange]);
 
   const handleDrop = useCallback((e: React.DragEvent, category: BrandAssetCategory) => {
@@ -93,8 +120,18 @@ const BrandAssetsPanel = ({ assets, onAssetsChange, highlightCategories, project
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2" role="list" aria-label="Categories d'assets">
-        {CATEGORIES.map((cat) => {
+      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4" role="list" aria-label="Categories d'assets">
+        {CATEGORY_GROUPS.map((group) => (
+          <div key={group.title} className="space-y-2">
+            <div className="px-1 pt-1">
+              <h3 className="text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
+                {group.title}
+              </h3>
+              {group.subtitle && (
+                <p className="text-[10px] text-muted-foreground/60 mt-0.5">{group.subtitle}</p>
+              )}
+            </div>
+            {group.items.map((cat) => {
           const catAssets = assets.filter((a) => a.category === cat.key);
           const isExpanded = expandedCat === cat.key;
           const isHighlighted = highlightCategories?.includes(cat.key);
@@ -219,7 +256,9 @@ const BrandAssetsPanel = ({ assets, onAssetsChange, highlightCategories, project
               </AnimatePresence>
             </div>
           );
-        })}
+            })}
+          </div>
+        ))}
       </div>
 
       <input

@@ -45,7 +45,7 @@ const Login = () => {
     <div className="flex min-h-screen">
       {/* Left — branding panel */}
       <div className="hidden lg:flex lg:w-1/2 flex-col justify-between bg-background p-12 relative overflow-hidden border-r border-border">
-        {/* Subtle red accent line */}
+        {/* Subtle accent line */}
         <div className="absolute top-0 left-0 w-1 h-full bg-accent" />
         
         <div>

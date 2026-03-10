@@ -335,7 +335,7 @@ const CampaignGallery = ({ metadata, onOpenCanvas }: Props) => {
                       whileInView={{ opacity: 1, y: 0 }}
                       viewport={{ once: true }}
                       transition={{ delay: i * 0.08 }}
-                      className="overflow-hidden rounded-xl border border-border bg-black"
+                      className="overflow-hidden rounded-xl border border-border bg-muted"
                     >
                       <video
                         controls

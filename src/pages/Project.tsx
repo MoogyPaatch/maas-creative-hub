@@ -20,9 +20,13 @@ import {
   downloadDossierPDF,
   createShareLink,
   submitDeclinaisonConfig,
+  approvePPMGate,
 } from "@/lib/api";
 import type { ClientBriefValidateRequest } from "@/lib/api";
 import { parseSSEStream } from "@/lib/sse";
+import type { ThinkingEvent } from "@/lib/sse";
+import { accumulateThinking } from "@/components/chat/ThinkingIndicator";
+import type { ThinkingState } from "@/components/chat/ThinkingIndicator";
 import ChatPanel from "@/components/chat/ChatPanel";
 import OutputPanel from "@/components/output/OutputPanel";
 import WorkflowStepper from "@/components/layout/WorkflowStepper";
@@ -85,7 +89,8 @@ const ProjectPage = () => {
   const [showHistory, setShowHistory] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [artifacts, setArtifacts] = useState<ChatMessage[]>([]);
-  const [thinking, setThinking] = useState<string | null>(null);
+  const [thinking, setThinking] = useState<ThinkingState | null>(null);
+  const thinkingRef = useRef<ThinkingState | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [projectStatus, setProjectStatus] = useState<ProjectStatus | null>(null);
   const [briefData, setBriefData] = useState<any>(null);
@@ -98,6 +103,7 @@ const ProjectPage = () => {
   const [showShareDialog, setShowShareDialog] = useState(false);
   const [copied, setCopied] = useState(false);
   const [forceAssetsSignal, setForceAssetsSignal] = useState(0);
+  const [highlightAssetCategories, setHighlightAssetCategories] = useState<string[]>([]);
 
   // Client brief draft state (SSE-driven)
   const [clientBriefDraft, setClientBriefDraft] = useState<ClientBriefDraft>({ ...EMPTY_BRIEF_DRAFT });
@@ -414,10 +420,12 @@ const ProjectPage = () => {
   const handleSSEStream = useCallback(async (stream: ReadableStream<Uint8Array> | null) => {
     if (!stream) return;
     setIsStreaming(true);
-    setThinking("Traitement en cours...");
+    thinkingRef.current = { agentName: "Traitement", progress: 0, tasks: [{ label: "Traitement en cours...", status: "active" as const }], taskTotal: 0 };
+    setThinking(thinkingRef.current);
     await parseSSEStream(
       stream,
       (msg) => {
+        thinkingRef.current = null;
         setThinking(null);
         const msgType = msg.metadata?.type;
         const isPanelOnly = msgType && PANEL_ONLY_TYPES.has(msgType);
@@ -429,10 +437,14 @@ const ProjectPage = () => {
           setMessages((prev) => [...prev, msg]);
         }
 
-        // Handle show_upload_ui action — switch to assets tab
-        if (msg.metadata?.show_upload_ui || msg.metadata?.action === "show_upload_ui") {
+        // Handle asset_request or show_upload_ui — switch to assets tab and highlight categories
+        if (msg.metadata?.type === "asset_request" || msg.metadata?.show_upload_ui || msg.metadata?.action === "show_upload_ui") {
           setForceAssetsSignal((prev) => prev + 1);
           setMobileTab("output");
+          const categories = msg.metadata?.requested_asset_categories;
+          if (Array.isArray(categories) && categories.length > 0) {
+            setHighlightAssetCategories(categories);
+          }
           toast.info("Vous pouvez uploader vos fichiers dans le panneau de droite");
         }
 
@@ -450,6 +462,7 @@ const ProjectPage = () => {
         }
       },
       () => {
+        thinkingRef.current = null;
         setThinking(null);
         setIsStreaming(false);
         if (id) {
@@ -491,7 +504,11 @@ const ProjectPage = () => {
           }).catch(() => {});
         }
       },
-      (label) => setThinking(label),
+      (event: ThinkingEvent) => {
+        const next = accumulateThinking(thinkingRef.current, event);
+        thinkingRef.current = next;
+        setThinking(next);
+      },
       handleBriefDraftUpdate,
       (action, options, validationData) => {
         console.log("Action required:", { action, options, validationData });
@@ -563,6 +580,21 @@ const ProjectPage = () => {
     }
   }, [handleSSEStream]);
 
+  const handlePPMApprove = useCallback(async (action: "approve" | "revision", feedback?: string) => {
+    if (!conversationId || !id) return;
+    try {
+      // 1. POST to gates/ppm endpoint to update DB (validation, storyboard)
+      await approvePPMGate(id, action, feedback || "");
+      // 2. Send a message via SSE to trigger the graph (prod or revision)
+      const messageText = action === "approve" ? "approve" : `reject: ${feedback || "modifications demandées"}`;
+      const stream = await sendMessageSSE(conversationId, "quick_reply", messageText);
+      await handleSSEStream(stream);
+    } catch {
+      toast.error("Erreur lors de la validation PPM");
+      setIsStreaming(false);
+    }
+  }, [conversationId, id, handleSSEStream]);
+
   const handleReject = useCallback(async (validationId: string, feedback: string) => {
     try {
       const stream = await rejectValidation(validationId, feedback);
@@ -625,8 +657,14 @@ const ProjectPage = () => {
         setMessages((prev) => [...prev, { role: "user", content: `📎 ${file.name}`, timestamp: new Date() }]);
         toast.success(`${file.name} envoyé`);
         const ext = file.name.split(".").pop()?.toLowerCase();
-        if (conversationId && (ext === "pdf" || ext === "docx" || ext === "doc")) {
-          const stream = await sendMessageSSE(conversationId, "text", "extract-brief", true);
+        const extractable = ["pdf", "docx", "doc", "txt", "md", "png", "jpg", "jpeg", "webp"];
+        if (conversationId && ext && extractable.includes(ext)) {
+          const stream = await sendMessageSSE(
+            conversationId,
+            "text",
+            `Fichier uploadé : ${file.name}`,
+            true,
+          );
           await handleSSEStream(stream);
         }
       } catch {
@@ -750,10 +788,12 @@ const ProjectPage = () => {
     onSelectPiste: handleSelectPiste,
     onApprove: handleApprove,
     onReject: handleReject,
+    onPPMApprove: handlePPMApprove,
     onLaunchDeclinaisons: handleLaunchDeclinaisons,
     onSkipDeclinaisons: handleSkipDeclinaisons,
     brandAssets,
     onBrandAssetsChange: setBrandAssets,
+    highlightAssetCategories,
     currentStep: projectStatus?.current_step || "commercial",
     isClientView: isClient,
     isStreaming,

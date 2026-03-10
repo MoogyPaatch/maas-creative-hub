@@ -141,12 +141,34 @@ function sanitizeFilename(raw: string): string {
   return safe || "upload.bin";
 }
 
-// Upload file via presigned GCS URL
+// Upload file — tries direct multipart first, falls back to presigned URL flow
 export async function uploadFile(projectId: string, file: File, category: string = "reference"): Promise<any> {
   const mimeType = file.type || "application/octet-stream";
-  const safeFilename = sanitizeFilename(file.name);
 
-  // Step 1: Get presigned URL
+  // Primary: direct multipart upload (works without service account key)
+  try {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("category", category);
+    formData.append("project_id", projectId);
+
+    const token = localStorage.getItem("maas_token");
+    const res = await fetch(`${API_URL}/brand-assets/upload`, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+    // If direct upload fails (e.g. 404 on older backend), fall through to presigned flow
+    console.warn("Direct upload failed, trying presigned URL flow:", res.status);
+  } catch (e) {
+    console.warn("Direct upload error, trying presigned URL flow:", e);
+  }
+
+  // Fallback: presigned URL flow (requires service account key on backend)
+  const safeFilename = sanitizeFilename(file.name);
   const presign = await request<{ upload_url: string; gcs_path: string; expires_in: number }>(
     "/storage/presign",
     {
@@ -159,7 +181,6 @@ export async function uploadFile(projectId: string, file: File, category: string
     }
   );
 
-  // Step 2: Upload raw file to GCS (no auth header, no FormData)
   const uploadResp = await fetch(presign.upload_url, {
     method: "PUT",
     headers: { "Content-Type": mimeType },
@@ -169,7 +190,6 @@ export async function uploadFile(projectId: string, file: File, category: string
     throw new Error(`Upload to storage failed: ${uploadResp.status}`);
   }
 
-  // Step 3: Register asset in DB
   const asset = await request<any>("/brand-assets", {
     method: "POST",
     body: JSON.stringify({

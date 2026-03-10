@@ -308,7 +308,7 @@ const DemoPage = () => {
   const [activeStep, setActiveStep] = useState<WorkflowStep>(savedState?.activeStep || "commercial");
   const [visibleCount, setVisibleCount] = useState<number>(savedState?.visibleCount || 1);
   const [brandAssets, setBrandAssets] = useState<BrandAsset[]>([]);
-  const [thinking, setThinking] = useState<string | null>(null);
+  const [thinking, setThinking] = useState<import("@/components/chat/ThinkingIndicator").ThinkingState | null>(null);
   const [mobilePanel, setMobilePanel] = useState<"chat" | "output">("chat");
 
   // Persist state
@@ -345,7 +345,7 @@ const DemoPage = () => {
   // Advance conversation by N messages with thinking animation
   const advanceMessages = useCallback((count: number, step?: WorkflowStep) => {
     if (count <= 0) return;
-    setThinking("Marcel réfléchit...");
+    setThinking({ agentName: "Marcel", progress: 50, tasks: [{ label: "Marcel reflechit...", status: "active" as const }], taskTotal: 1 });
     let added = 0;
     const interval = setInterval(() => {
       added++;
