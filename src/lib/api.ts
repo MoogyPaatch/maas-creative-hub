@@ -133,9 +133,18 @@ export async function sendMessageSSE(
   return res.body;
 }
 
+/** Sanitize a filename to safe characters (letters, digits, dots, hyphens, underscores). */
+function sanitizeFilename(raw: string): string {
+  // Take only the basename (drop any path prefix)
+  const basename = raw.split(/[\\/]/).pop() || raw;
+  const safe = basename.replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 255);
+  return safe || "upload.bin";
+}
+
 // Upload file via presigned GCS URL
-export async function uploadFile(projectId: string, file: File): Promise<any> {
+export async function uploadFile(projectId: string, file: File, category: string = "reference"): Promise<any> {
   const mimeType = file.type || "application/octet-stream";
+  const safeFilename = sanitizeFilename(file.name);
 
   // Step 1: Get presigned URL
   const presign = await request<{ upload_url: string; gcs_path: string; expires_in: number }>(
@@ -143,9 +152,9 @@ export async function uploadFile(projectId: string, file: File): Promise<any> {
     {
       method: "POST",
       body: JSON.stringify({
-        filename: file.name,
+        filename: safeFilename,
         mime_type: mimeType,
-        category: "reference",
+        category,
       }),
     }
   );
@@ -166,7 +175,7 @@ export async function uploadFile(projectId: string, file: File): Promise<any> {
     body: JSON.stringify({
       name: file.name,
       gcs_path: presign.gcs_path,
-      category: "reference",
+      category,
       mime_type: mimeType,
       file_size: file.size,
       project_id: projectId,
@@ -233,6 +242,17 @@ export async function approvePPMGate(projectId: string, action: "approve" | "rev
   return request<any>(`/projects/${projectId}/gates/ppm`, {
     method: "POST",
     body: JSON.stringify({ action, feedback }),
+  });
+}
+
+// Déclinaison config
+export async function submitDeclinaisonConfig(
+  conversationId: string,
+  config: Record<string, Record<string, boolean>>,
+) {
+  return request<any>(`/conversations/${conversationId}/declinaison-config`, {
+    method: "POST",
+    body: JSON.stringify(config),
   });
 }
 

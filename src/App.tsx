@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import ErrorBoundary from "@/components/ErrorBoundary";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence } from "framer-motion";
 import Login from "./pages/Login";
 import Index from "./pages/Index";
 import Projects from "./pages/Projects";
@@ -40,13 +40,6 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
   if (user) return <Navigate to="/projects" replace />;
   return <>{children}</>;
 }
-
-const pageTransition = {
-  initial: { opacity: 0, y: 8 },
-  animate: { opacity: 1, y: 0 },
-  exit: { opacity: 0, y: -8 },
-  transition: { duration: 0.25, ease: [0.25, 0.46, 0.45, 0.94] as const },
-};
 
 function AnimatedRoutes() {
   const location = useLocation();

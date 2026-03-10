@@ -2,6 +2,7 @@ import { useRef, useEffect, useMemo, useState, useCallback } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import ChatMessageBubble from "./ChatMessage";
 import ChatInput from "./ChatInput";
+import type { ChatInputHandle } from "./ChatInput";
 import ThinkingIndicator from "./ThinkingIndicator";
 import { ArrowDown } from "lucide-react";
 import type { ChatMessage } from "@/types";
@@ -17,8 +18,46 @@ interface Props {
   isStreaming: boolean;
 }
 
+// Detect phase transition messages that mark the end of the brief intake
+const BRIEF_VALIDATED_PATTERNS = [
+  "brief_client_validate",
+  "brief valide",
+  "brief validé",
+  "production en cours",
+  "lancement du pipeline",
+];
+
+function isBriefTransition(msg: ChatMessage): boolean {
+  if (msg.role !== "agent") return false;
+  const content = (msg.content || "").toLowerCase();
+  const metaType = msg.metadata?.type?.toLowerCase() || "";
+  const phase = msg.metadata?.supervisor_phase?.toLowerCase() || "";
+  return (
+    BRIEF_VALIDATED_PATTERNS.some((p) => content.includes(p) || metaType.includes(p)) ||
+    phase === "planner" ||
+    phase === "dc_visual"
+  );
+}
+
+function PhaseDivider({ label }: { label: string }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, scaleX: 0.5 }}
+      animate={{ opacity: 1, scaleX: 1 }}
+      className="flex items-center gap-3 py-3"
+    >
+      <div className="flex-1 border-t border-primary/30" />
+      <span className="whitespace-nowrap rounded-full bg-primary/10 px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider text-primary">
+        {label}
+      </span>
+      <div className="flex-1 border-t border-primary/30" />
+    </motion.div>
+  );
+}
+
 const ChatPanel = ({ messages, thinking, onSendMessage, onQuickReply, onAttach, isStreaming }: Props) => {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const chatInputRef = useRef<ChatInputHandle>(null);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
 
   const scrollToBottom = useCallback(() => {
@@ -44,6 +83,22 @@ const ChatPanel = ({ messages, thinking, onSendMessage, onQuickReply, onAttach, 
     [messages]
   );
 
+  // Track which messages have a divider after them (only the first transition)
+  const dividerAfterIndex = useMemo(() => {
+    for (let i = 0; i < messages.length; i++) {
+      if (isBriefTransition(messages[i])) return i;
+    }
+    return -1;
+  }, [messages]);
+
+  const handleFocusInput = useCallback(() => {
+    chatInputRef.current?.focusInput("Precisez votre reponse...");
+  }, []);
+
+  const handleTriggerFileUpload = useCallback(() => {
+    chatInputRef.current?.triggerFileUpload();
+  }, []);
+
   return (
     <div className="flex h-full flex-col bg-background">
       {/* Header */}
@@ -60,7 +115,7 @@ const ChatPanel = ({ messages, thinking, onSendMessage, onQuickReply, onAttach, 
                 <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-success" />
               </span>
             </div>
-            <p className="text-[10px] text-muted-foreground font-medium">Agence créative IA</p>
+            <p className="text-[10px] text-muted-foreground font-medium">Agence creative IA</p>
           </div>
         </div>
       </div>
@@ -75,12 +130,18 @@ const ChatPanel = ({ messages, thinking, onSendMessage, onQuickReply, onAttach, 
           aria-label="Conversation"
         >
           {messages.map((msg, i) => (
-            <ChatMessageBubble
-              key={i}
-              message={msg}
-              showQuickReplies={i === lastQRIndex}
-              onQuickReply={onQuickReply}
-            />
+            <div key={i}>
+              <ChatMessageBubble
+                message={msg}
+                showQuickReplies={i === lastQRIndex}
+                onQuickReply={onQuickReply}
+                onFocusInput={handleFocusInput}
+                onTriggerFileUpload={handleTriggerFileUpload}
+              />
+              {i === dividerAfterIndex && (
+                <PhaseDivider label="Brief valide — Production en cours" />
+              )}
+            </div>
           ))}
           <AnimatePresence>
             {thinking && <ThinkingIndicator label={thinking} />}
@@ -103,7 +164,7 @@ const ChatPanel = ({ messages, thinking, onSendMessage, onQuickReply, onAttach, 
         </AnimatePresence>
       </div>
 
-      <ChatInput onSend={onSendMessage} onAttach={onAttach} disabled={isStreaming} />
+      <ChatInput ref={chatInputRef} onSend={onSendMessage} onAttach={onAttach} disabled={isStreaming} />
     </div>
   );
 };

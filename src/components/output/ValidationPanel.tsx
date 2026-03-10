@@ -8,8 +8,8 @@ interface Props {
   gate: string;
   validationId: string;
   content: string;
-  onApprove: (id: string, feedback: string | null) => void;
-  onReject: (id: string, feedback: string) => void;
+  onApprove: (id: string, feedback: string | null) => Promise<void> | void;
+  onReject: (id: string, feedback: string) => Promise<void> | void;
 }
 
 const ValidationPanel = ({ gate, validationId, content, onApprove, onReject }: Props) => {
@@ -28,7 +28,7 @@ const ValidationPanel = ({ gate, validationId, content, onApprove, onReject }: P
   const handleApprove = async () => {
     setLoading(true);
     try {
-      onApprove(validationId, null);
+      await onApprove(validationId, null);
       setSubmitted("approved");
       toast.success("Validation approuvée");
     } catch {
@@ -42,7 +42,7 @@ const ValidationPanel = ({ gate, validationId, content, onApprove, onReject }: P
     if (!feedback.trim()) return;
     setLoading(true);
     try {
-      onReject(validationId, feedback.trim());
+      await onReject(validationId, feedback.trim());
       setSubmittedFeedback(feedback.trim());
       setSubmitted("rejected");
       toast.success("Modifications demandées");

@@ -170,7 +170,34 @@ function AudioPlayer({ asset }: { asset: ProductionAsset }) {
 
 /* ─── Main Gallery ─── */
 const CampaignGallery = ({ metadata, onOpenCanvas }: Props) => {
-  const assets = metadata.production_assets || [];
+  // Normalize backend fields (name→title, file_url→url) to frontend ProductionAsset format
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let videoSeqCounter = 0;
+  const assets: ProductionAsset[] = (metadata.production_assets || [])
+    .map((a: any) => {
+      const url = a.url || a.file_url || "";
+      const type = a.type || a.asset_type || "image";
+      // Skip assets with no URL (e.g. failed assembly)
+      if (!url) return null;
+      let title = a.title || a.name || "Asset";
+      // Give meaningful names to generic "Sequence - frame" video titles
+      if (type === "video" && /^Sequence\s*-\s*frame$/i.test(title)) {
+        videoSeqCounter++;
+        const dur = a.duration || (a.duration_seconds ? `${Math.round(a.duration_seconds)}s` : "");
+        title = `Séquence ${videoSeqCounter}${dur ? ` (${dur})` : ""}`;
+      }
+      return {
+        id: a.id || `asset-${Math.random()}`,
+        type,
+        title,
+        format: a.format || "",
+        url,
+        thumbnail_url: a.thumbnail_url,
+        duration: a.duration || (a.duration_seconds ? `${Math.round(a.duration_seconds)}s` : undefined),
+        file_size: a.file_size,
+      };
+    })
+    .filter((a): a is ProductionAsset => a !== null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   const grouped = assets.reduce<Record<string, ProductionAsset[]>>((acc, a) => {
@@ -234,6 +261,26 @@ const CampaignGallery = ({ metadata, onOpenCanvas }: Props) => {
 
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto px-6 py-6 space-y-10">
+        {assets.length === 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex flex-col items-center justify-center py-20 text-center"
+          >
+            <div className="mb-4 rounded-full bg-muted/50 p-6">
+              <Package className="h-10 w-10 text-muted-foreground" />
+            </div>
+            <h3 className="text-lg font-semibold text-foreground">Production en cours</h3>
+            <p className="mt-2 max-w-md text-sm text-muted-foreground">
+              Les assets de campagne seront affichés ici une fois la production terminée.
+              {metadata.media_types && (metadata.media_types as string[]).length > 0 && (
+                <span className="mt-2 block">
+                  Formats prévus : {(metadata.media_types as string[]).map((t: string) => t.charAt(0).toUpperCase() + t.slice(1)).join(", ")}
+                </span>
+              )}
+            </p>
+          </motion.div>
+        )}
         {sectionOrder.map((type) => {
           const items = grouped[type];
           if (!items?.length) return null;

@@ -314,7 +314,7 @@ type ViewMode = "grid" | "kanban";
 type SortKey = "date" | "name" | "phase";
 
 const Projects = () => {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -399,7 +399,7 @@ const Projects = () => {
             <div className="flex items-center gap-6">
               <span className="text-xs text-muted-foreground hidden sm:block font-medium">{user?.email}</span>
               <button
-                onClick={() => { localStorage.removeItem("maas_token"); navigate("/login"); }}
+                onClick={() => { logout(); navigate("/login"); }}
                 className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors font-medium"
               >
                 <LogOut className="h-3.5 w-3.5" />
@@ -437,7 +437,7 @@ const Projects = () => {
           <div className="flex items-center gap-6">
             <span className="text-xs text-muted-foreground hidden sm:block font-medium">{user?.email}</span>
             <button
-              onClick={() => { localStorage.removeItem("maas_token"); navigate("/login"); }}
+              onClick={() => { logout(); navigate("/login"); }}
               className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors font-medium"
             >
               <LogOut className="h-3.5 w-3.5" />

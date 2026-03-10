@@ -19,6 +19,7 @@ import {
   validateClientBrief,
   downloadDossierPDF,
   createShareLink,
+  submitDeclinaisonConfig,
 } from "@/lib/api";
 import type { ClientBriefValidateRequest } from "@/lib/api";
 import { parseSSEStream } from "@/lib/sse";
@@ -32,6 +33,44 @@ import { EMPTY_BRIEF_DRAFT, CLIENT_BRIEF_REQUIRED_FIELDS } from "@/types";
 import { ArrowLeft, Loader2, History, Shield, Download, Share2, Copy, Check } from "lucide-react";
 import logoBlack from "@/assets/logo-marcel-black.png";
 import logoWhite from "@/assets/logo-marcel-white.png";
+
+/** Artifact types that should appear ONLY in the output panel, not as long chat messages */
+const PANEL_ONLY_TYPES = new Set(["dc_copy_result", "ppm_presentation", "dc_presentation", "creative_brief", "campaign_gallery"]);
+const PANEL_ONLY_NOTIFS: Record<string, string> = {
+  dc_presentation: "Les pistes créatives sont prêtes. Consultez le panneau à droite.",
+  dc_copy_result: "Les contenus rédactionnels sont prêts. Consultez le panneau à droite.",
+  ppm_presentation: "Le dossier PPM est prêt. Consultez le panneau à droite.",
+  creative_brief: "Le brief créatif stratégique est prêt. Consultez le panneau à droite.",
+  campaign_gallery: "Les assets de campagne sont disponibles. Consultez le panneau à droite.",
+};
+
+/** Map raw quick_reply IDs to user-friendly labels (for historical messages loaded from DB) */
+const QR_LABEL_MAP: Record<string, string> = {
+  has_brief: "J'ai un brief",
+  describe_here: "Je décris ici",
+  upload_brief: "J'envoie un document",
+  approve: "Approuver ✓",
+  reject: "Demander des modifications",
+  skip: "Passer",
+  validate: "Valider",
+  launch_declinaisons: "Lancer les declinaisons",
+  skip_declinaisons: "Passer les declinaisons",
+};
+
+/** Internal pipeline messages that should be hidden from the chat (noise for the user) */
+const INTERNAL_MSG_PATTERNS = [
+  /^Brief valide recu/i,
+  /^Analyse termin[eé]e/i,
+  /^Plan de recherche gen[eé]r[eé]/i,
+  /^Debut des analyses/i,
+  /^Synthese recherche termin[eé]e/i,
+  /^Brief cr[eé]atif re[cç]u/i,
+  /^Lancement de la direction/i,
+  /^Analyse du contexte visuel/i,
+  /^Validation confirm[eé]e\. Passage/i,
+  /^Les masters sont valid[eé]s/i,
+  /^Configuration des d[eé]clinaisons/i,
+];
 
 const ProjectPage = () => {
   const { id } = useParams<{ id: string }>();
@@ -58,6 +97,7 @@ const ProjectPage = () => {
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [showShareDialog, setShowShareDialog] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [forceAssetsSignal, setForceAssetsSignal] = useState(0);
 
   // Client brief draft state (SSE-driven)
   const [clientBriefDraft, setClientBriefDraft] = useState<ClientBriefDraft>({ ...EMPTY_BRIEF_DRAFT });
@@ -156,7 +196,25 @@ const ProjectPage = () => {
           getProjectStatus(id).catch(() => null),
           getProject(id),
         ]);
-        if (status) setProjectStatus(status);
+        if (status) {
+          setProjectStatus(status);
+        } else if (project) {
+          // Fallback: derive basic status from project data
+          const phase = project.supervisor_phase || "commercial";
+          const PHASE_ORDER = ["commercial", "planner", "dc_visual", "dc_copy", "ppm", "prod_image", "prod_video", "prod_audio", "delivered"];
+          const phaseIdx = PHASE_ORDER.indexOf(phase);
+          setProjectStatus({
+            project_name: project.name || project.brand_name || "Nouvelle campagne",
+            current_step: phase,
+            pipeline: [
+              { step: "commercial", label: "Brief", status: phaseIdx > 0 ? "done" : phaseIdx === 0 ? "active" : "pending" },
+              { step: "dc_visual", label: "Création", status: phaseIdx > 3 ? "done" : (phaseIdx >= 1 && phaseIdx <= 3) ? "active" : "pending" },
+              { step: "ppm", label: "PPM", status: phaseIdx > 4 ? "done" : phaseIdx === 4 ? "active" : "pending" },
+              { step: "delivered", label: "Livré", status: phaseIdx >= 8 ? "done" : (phaseIdx >= 5 && phaseIdx <= 7) ? "active" : "pending" },
+            ],
+            pending_validations: [],
+          });
+        }
         getBrief(id).then((brief) => {
           if (brief) {
             setBriefData(brief);
@@ -192,7 +250,11 @@ const ProjectPage = () => {
         loadConversationsList();
 
         const currentStep = status?.current_step || project.supervisor_phase || "commercial";
-        const targetAgent = isAgency ? (currentStep || "commercial") : null;
+        const VALID_TARGETS = ["commercial", "planner", "dc", "dc_visual", "dc_copy", "ppm", "prod"];
+        const resolvedTarget = VALID_TARGETS.includes(currentStep)
+          ? currentStep
+          : currentStep.startsWith("prod_") ? "prod" : "commercial";
+        const targetAgent = isAgency ? resolvedTarget : null;
 
         let conv: any = null;
         if (project.latest_conversation_id) {
@@ -203,12 +265,41 @@ const ProjectPage = () => {
         }
 
         setConversationId(conv.conversation_id);
-        const existingMessages: ChatMessage[] = (conv.messages || []).map((m: any) => ({
-          role: m.role === "user" ? "user" : "agent",
-          content: m.content || "",
-          quickReplies: m.quick_replies?.map((qr: any) => ({ id: qr.id, label: qr.label })),
-          metadata: m.metadata,
-        }));
+        const existingMessages: ChatMessage[] = (conv.messages || [])
+          .map((m: any) => {
+            const mType = m.metadata?.type;
+            // Filter by metadata type (works for SSE-cached messages)
+            if (m.role !== "user" && mType && PANEL_ONLY_TYPES.has(mType)) {
+              return {
+                role: "agent" as const,
+                content: PANEL_ONLY_NOTIFS[mType] || "Nouveau contenu disponible dans le panneau à droite.",
+                metadata: m.metadata,
+              };
+            }
+            const content = m.content || "";
+            // Hide internal pipeline status messages from agent
+            if (m.role !== "user" && INTERNAL_MSG_PATTERNS.some((re) => re.test(content))) {
+              return null; // will be filtered out below
+            }
+            // Fallback: truncate excessively long agent messages (DB doesn't persist metadata.type)
+            if (m.role !== "user" && content.length > 800) {
+              return {
+                role: "agent" as const,
+                content: "Contenu détaillé disponible dans le panneau à droite. →",
+              };
+            }
+            // Map raw quick_reply IDs to friendly labels for user messages
+            const displayContent = m.role === "user" && QR_LABEL_MAP[content.trim()]
+              ? QR_LABEL_MAP[content.trim()]
+              : content;
+            return {
+              role: m.role === "user" ? ("user" as const) : ("agent" as const),
+              content: displayContent,
+              quickReplies: m.quick_replies?.map((qr: any) => ({ id: qr.id, label: qr.label })),
+              metadata: m.metadata,
+            };
+          })
+          .filter((m): m is ChatMessage => m !== null);
         setMessages(existingMessages);
 
         // Restore artifacts and brief draft from message history (BUG 3 fix)
@@ -223,6 +314,11 @@ const ProjectPage = () => {
           const meta = m.metadata;
           if (!meta?.type) continue;
           if (artifactTypes.includes(meta.type)) {
+            // For validation_required, keep only the latest
+            if (meta.type === "validation_required") {
+              const existingIdx = restoredArtifacts.findIndex((a) => a.metadata?.type === "validation_required");
+              if (existingIdx >= 0) restoredArtifacts.splice(existingIdx, 1);
+            }
             restoredArtifacts.push({
               role: "agent",
               content: m.content || "",
@@ -236,11 +332,22 @@ const ProjectPage = () => {
         }
 
         // Merge with any artifacts from conv.artifacts (if backend returns them)
+        // Backend artifacts have DB-enriched data (e.g., campaign_gallery with real URLs)
         const backendArtifacts: ChatMessage[] = (conv.artifacts || []).map((a: any) => ({
           role: "agent" as const, content: a.content || "", metadata: a.metadata,
         }));
-        const allArtifacts = restoredArtifacts.length > 0 ? restoredArtifacts : backendArtifacts;
-        if (allArtifacts.length > 0) setArtifacts(allArtifacts);
+        // For types where backend has richer data, prefer backend artifact over message-restored
+        const DB_ENRICHED_TYPES = new Set(["campaign_gallery"]);
+        const mergedArtifacts = restoredArtifacts.length > 0
+          ? restoredArtifacts.map((a) => {
+              if (a.metadata?.type && DB_ENRICHED_TYPES.has(a.metadata.type)) {
+                const backendVersion = backendArtifacts.find((b) => b.metadata?.type === a.metadata?.type);
+                return backendVersion || a;
+              }
+              return a;
+            })
+          : backendArtifacts;
+        if (mergedArtifacts.length > 0) setArtifacts(mergedArtifacts);
 
         if (Object.keys(restoredBrief).length > 0) {
           handleBriefDraftUpdate(restoredBrief as Partial<ClientBriefDraft>);
@@ -254,14 +361,30 @@ const ProjectPage = () => {
         console.error("Init error:", err);
         toast.error("Erreur de chargement du projet");
         try {
-          const conv = await createConversation(id, isAgency, "commercial");
+          const conv = await createConversation(id, isAgency, isAgency ? "commercial" : null);
           setConversationId(conv.conversation_id);
-          const existingMessages: ChatMessage[] = (conv.messages || []).map((m: any) => ({
-            role: m.role === "user" ? "user" : "agent",
-            content: m.content || "",
-            quickReplies: m.quick_replies?.map((qr: any) => ({ id: qr.id, label: qr.label })),
-            metadata: m.metadata,
-          }));
+          const existingMessages: ChatMessage[] = (conv.messages || []).map((m: any) => {
+            const mType = m.metadata?.type;
+            if (m.role !== "user" && mType && PANEL_ONLY_TYPES.has(mType)) {
+              return {
+                role: "agent" as const,
+                content: PANEL_ONLY_NOTIFS[mType] || "Nouveau contenu disponible dans le panneau à droite.",
+              };
+            }
+            const content = m.content || "";
+            if (m.role !== "user" && content.length > 800) {
+              return {
+                role: "agent" as const,
+                content: "Contenu détaillé disponible dans le panneau à droite. →",
+              };
+            }
+            return {
+              role: m.role === "user" ? ("user" as const) : ("agent" as const),
+              content,
+              quickReplies: m.quick_replies?.map((qr: any) => ({ id: qr.id, label: qr.label })),
+              metadata: m.metadata,
+            };
+          });
           setMessages(existingMessages);
         } catch {
           toast.error("Impossible de créer la conversation");
@@ -296,9 +419,33 @@ const ProjectPage = () => {
       stream,
       (msg) => {
         setThinking(null);
-        setMessages((prev) => [...prev, msg]);
+        const msgType = msg.metadata?.type;
+        const isPanelOnly = msgType && PANEL_ONLY_TYPES.has(msgType);
+
+        if (isPanelOnly) {
+          const notifText = PANEL_ONLY_NOTIFS[msgType!] || "Nouveau contenu disponible dans le panneau à droite.";
+          setMessages((prev) => [...prev, { role: "agent", content: notifText, timestamp: new Date() }]);
+        } else {
+          setMessages((prev) => [...prev, msg]);
+        }
+
+        // Handle show_upload_ui action — switch to assets tab
+        if (msg.metadata?.show_upload_ui || msg.metadata?.action === "show_upload_ui") {
+          setForceAssetsSignal((prev) => prev + 1);
+          setMobileTab("output");
+          toast.info("Vous pouvez uploader vos fichiers dans le panneau de droite");
+        }
+
         if (msg.metadata?.type && msg.metadata.type !== "client_brief_draft" && msg.metadata.type !== "status_update") {
-          setArtifacts((prev) => [...prev, msg]);
+          // Types that should only have one tab (replace existing on re-emit)
+          const SINGLETON_TYPES = new Set(["validation_required", "campaign_gallery", "dc_presentation", "ppm_presentation"]);
+          setArtifacts((prev) => {
+            if (msg.metadata?.type && SINGLETON_TYPES.has(msg.metadata.type)) {
+              const without = prev.filter((a) => a.metadata?.type !== msg.metadata?.type);
+              return [...without, msg];
+            }
+            return [...prev, msg];
+          });
           setMobileTab("output");
         }
       },
@@ -386,7 +533,16 @@ const ProjectPage = () => {
 
   const handleSelectPiste = useCallback(async (pisteId: string) => {
     if (!conversationId) return;
-    setMessages((prev) => [...prev, { role: "user", content: `Je choisis ${pisteId}`, timestamp: new Date() }]);
+    // Find piste title from artifacts for a user-friendly message
+    let pisteLabel = pisteId;
+    for (const a of artifacts) {
+      const pistes = a.metadata?.pistes;
+      if (pistes) {
+        const found = pistes.find((p: { id: string; title: string }) => p.id === pisteId);
+        if (found?.title) { pisteLabel = found.title; break; }
+      }
+    }
+    setMessages((prev) => [...prev, { role: "user", content: `Je choisis la piste "${pisteLabel}"`, timestamp: new Date() }]);
     try {
       const stream = await sendMessageSSE(conversationId, "quick_reply", pisteId);
       await handleSSEStream(stream);
@@ -395,7 +551,7 @@ const ProjectPage = () => {
       setIsStreaming(false);
       setThinking(null);
     }
-  }, [conversationId, handleSSEStream]);
+  }, [conversationId, artifacts, handleSSEStream]);
 
   const handleApprove = useCallback(async (validationId: string, feedback: string | null) => {
     try {
@@ -416,6 +572,44 @@ const ProjectPage = () => {
       setIsStreaming(false);
     }
   }, [handleSSEStream]);
+
+  const handleLaunchDeclinaisons = useCallback(async (config: Record<string, Record<string, boolean>>) => {
+    if (!conversationId) return;
+    try {
+      // 1. Submit the config to backend state
+      await submitDeclinaisonConfig(conversationId, config);
+      // 2. Send quick reply to trigger prod_declinaisons
+      const stream = await sendMessageSSE(conversationId, "quick_reply", "launch_declinaisons");
+      await handleSSEStream(stream);
+    } catch {
+      toast.error("Erreur lors du lancement des declinaisons");
+      setIsStreaming(false);
+    }
+  }, [conversationId, handleSSEStream]);
+
+  const handleSkipDeclinaisons = useCallback(async () => {
+    if (!conversationId) return;
+    try {
+      const stream = await sendMessageSSE(conversationId, "quick_reply", "skip_declinaisons");
+      await handleSSEStream(stream);
+    } catch {
+      toast.error("Erreur lors du passage des declinaisons");
+      setIsStreaming(false);
+    }
+  }, [conversationId, handleSSEStream]);
+
+  const handleAssetUploadComplete = useCallback(async (filename: string) => {
+    if (!conversationId) return;
+    const step = projectStatus?.current_step || "";
+    if (step === "brand_visuals" || step === "product_intake" || step === "commercial") {
+      try {
+        const stream = await sendMessageSSE(conversationId, "text", `UPLOAD_DONE: ${filename}`, true);
+        await handleSSEStream(stream);
+      } catch {
+        // Silent — upload itself succeeded, notification to supervisor is best-effort
+      }
+    }
+  }, [conversationId, projectStatus, handleSSEStream]);
 
   const handleAttach = useCallback(async (files: FileList) => {
     if (!id) return;
@@ -465,6 +659,11 @@ const ProjectPage = () => {
         const meta = m.metadata;
         if (!meta?.type) continue;
         if (artifactTypes.includes(meta.type)) {
+          // For validation_required, keep only the latest
+          if (meta.type === "validation_required") {
+            const existingIdx = restoredArtifacts.findIndex((a) => a.metadata?.type === "validation_required");
+            if (existingIdx >= 0) restoredArtifacts.splice(existingIdx, 1);
+          }
           restoredArtifacts.push({ role: "agent", content: m.content || "", metadata: meta, timestamp: new Date() });
         }
         if (meta.type === "client_brief_draft" && meta.brief_draft) {
@@ -473,7 +672,16 @@ const ProjectPage = () => {
       }
 
       const backendArtifacts = (conv.artifacts || []).map((a: any) => ({ role: "agent" as const, content: a.content || "", metadata: a.metadata }));
-      setArtifacts(restoredArtifacts.length > 0 ? restoredArtifacts : backendArtifacts);
+      const DB_ENRICHED = new Set(["campaign_gallery"]);
+      const merged = restoredArtifacts.length > 0
+        ? restoredArtifacts.map((a) => {
+            if (a.metadata?.type && DB_ENRICHED.has(a.metadata.type)) {
+              return backendArtifacts.find((b) => b.metadata?.type === a.metadata?.type) || a;
+            }
+            return a;
+          })
+        : backendArtifacts;
+      setArtifacts(merged);
 
       if (conv.brief_client_draft) handleBriefDraftUpdate(conv.brief_client_draft);
       setShowHistory(false);
@@ -538,10 +746,12 @@ const ProjectPage = () => {
     clientBriefDraft,
     changedBriefFields,
     onClientBriefFieldChange: handleClientBriefFieldChange,
-    onValidateClientBrief: handleValidateClientBrief,
+    onValidateClientBrief: (projectStatus?.current_step || "commercial") === "commercial" ? handleValidateClientBrief : undefined,
     onSelectPiste: handleSelectPiste,
     onApprove: handleApprove,
     onReject: handleReject,
+    onLaunchDeclinaisons: handleLaunchDeclinaisons,
+    onSkipDeclinaisons: handleSkipDeclinaisons,
     brandAssets,
     onBrandAssetsChange: setBrandAssets,
     currentStep: projectStatus?.current_step || "commercial",
@@ -549,6 +759,8 @@ const ProjectPage = () => {
     isStreaming,
     isValidatingBrief,
     projectId: id,
+    forceAssetsSignal,
+    onAssetUploadComplete: handleAssetUploadComplete,
   };
 
   return (
@@ -563,7 +775,7 @@ const ProjectPage = () => {
             <ArrowLeft className="h-4 w-4" />
           </button>
           <img src={logoBlack} alt="Marcel" className="hidden sm:block h-6 w-auto dark:hidden" />
-          <img src={logoWhite} alt="Marcel" className="hidden sm:block h-6 w-auto hidden dark:block" />
+          <img src={logoWhite} alt="Marcel" className="hidden h-6 w-auto dark:sm:block" />
           <div className="h-4 w-px bg-border hidden sm:block" />
           <span className="hidden sm:inline text-sm font-bold text-foreground truncate max-w-[200px]">
             {projectStatus?.project_name || "Nouvelle campagne"}

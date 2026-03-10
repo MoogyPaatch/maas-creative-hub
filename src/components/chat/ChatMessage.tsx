@@ -2,14 +2,20 @@ import { motion } from "framer-motion";
 import type { ChatMessage as ChatMessageType } from "@/types";
 import ReactMarkdown from "react-markdown";
 import { useState } from "react";
+import { Upload } from "lucide-react";
 
 interface Props {
   message: ChatMessageType;
   showQuickReplies: boolean;
   onQuickReply?: (id: string) => void;
+  onFocusInput?: () => void;
+  onTriggerFileUpload?: () => void;
 }
 
-const ChatMessageBubble = ({ message, showQuickReplies, onQuickReply }: Props) => {
+const AUTRE_IDS = new Set(["autre", "other", "custom"]);
+const FILE_IDS = new Set(["envoyer_un_fichier", "send_file", "upload_file", "fichier"]);
+
+const ChatMessageBubble = ({ message, showQuickReplies, onQuickReply, onFocusInput, onTriggerFileUpload }: Props) => {
   const isUser = message.role === "user";
   const [hovered, setHovered] = useState(false);
 
@@ -21,6 +27,18 @@ const ChatMessageBubble = ({ message, showQuickReplies, onQuickReply }: Props) =
   const time = message.timestamp
     ? new Date(message.timestamp).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
     : null;
+
+  const handleQuickReplyClick = (qrId: string) => {
+    if (AUTRE_IDS.has(qrId.toLowerCase())) {
+      onFocusInput?.();
+      return;
+    }
+    if (FILE_IDS.has(qrId.toLowerCase())) {
+      onTriggerFileUpload?.();
+      return;
+    }
+    onQuickReply?.(qrId);
+  };
 
   return (
     <motion.div
@@ -46,7 +64,6 @@ const ChatMessageBubble = ({ message, showQuickReplies, onQuickReply }: Props) =
               ? "bg-chat-user text-chat-user-foreground rounded-br-md shadow-sm"
               : "bg-chat-agent text-chat-agent-foreground rounded-bl-md hover:shadow-md"
           }`}
-          style={{ color: isUser ? 'hsl(var(--chat-user-foreground))' : 'hsl(var(--chat-agent-foreground))' }}
         >
           <div className="prose prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-li:my-0.5 [&_*]:!text-inherit [&_a]:!text-primary">
             <ReactMarkdown>{message.content}</ReactMarkdown>
@@ -74,19 +91,23 @@ const ChatMessageBubble = ({ message, showQuickReplies, onQuickReply }: Props) =
             role="group"
             aria-label="Réponses rapides"
           >
-            {message.quickReplies.map((qr) => (
-              <motion.button
-                key={qr.id}
-                variants={{
-                  hidden: { opacity: 0, y: 8, scale: 0.95 },
-                  visible: { opacity: 1, y: 0, scale: 1 },
-                }}
-                onClick={() => onQuickReply?.(qr.id)}
-                className="rounded-full border border-border bg-surface px-4 py-2 text-xs font-medium text-foreground transition-all hover:border-primary hover:text-primary hover:bg-primary/5 hover:shadow-md hover:shadow-primary/10 hover:-translate-y-0.5 active:scale-95"
-              >
-                {qr.label}
-              </motion.button>
-            ))}
+            {message.quickReplies.map((qr) => {
+              const isFileAction = FILE_IDS.has(qr.id.toLowerCase());
+              return (
+                <motion.button
+                  key={qr.id}
+                  variants={{
+                    hidden: { opacity: 0, y: 8, scale: 0.95 },
+                    visible: { opacity: 1, y: 0, scale: 1 },
+                  }}
+                  onClick={() => handleQuickReplyClick(qr.id)}
+                  className="rounded-full border border-border bg-surface px-4 py-2 text-xs font-medium text-foreground transition-all hover:border-primary hover:text-primary hover:bg-primary/5 hover:shadow-md hover:shadow-primary/10 hover:-translate-y-0.5 active:scale-95 inline-flex items-center gap-1.5"
+                >
+                  {isFileAction && <Upload className="h-3 w-3" />}
+                  {qr.label}
+                </motion.button>
+              );
+            })}
           </motion.div>
         )}
       </div>

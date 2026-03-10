@@ -153,6 +153,8 @@ export interface ChatMessageMetadata {
   gate?: string;
   validation_id?: string;
   production_assets?: ProductionAsset[];
+  media_types?: string[];
+  asset_count?: number;
   campaign_title?: string;
   zip_url?: string;
   requested_asset_categories?: BrandAssetCategory[];
@@ -160,9 +162,10 @@ export interface ChatMessageMetadata {
   status?: string;
   phase_label?: string;
   // action_required fields
-  action?: "validate_brief" | "select_piste" | "confirm";
+  action?: "validate_brief" | "select_piste" | "confirm" | "show_upload_ui";
   options?: string[];
   validation_data?: any;
+  show_upload_ui?: boolean;
 }
 
 // Legacy alias for compatibility
@@ -227,7 +230,7 @@ export interface CanvasElement {
   color?: string;
 }
 
-export type BrandAssetCategory = "logo" | "product" | "guidelines" | "typography" | "graphics";
+export type BrandAssetCategory = "logo" | "font" | "guideline" | "reference" | "product" | "other";
 
 export interface BrandAsset {
   id: string;

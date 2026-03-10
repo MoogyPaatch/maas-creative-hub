@@ -1,4 +1,4 @@
-import { useState, useRef, forwardRef } from "react";
+import { useState, useRef, forwardRef, useImperativeHandle } from "react";
 import { Send, Paperclip, Upload, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -8,29 +8,49 @@ interface Props {
   disabled?: boolean;
 }
 
-const ChatInput = forwardRef<HTMLDivElement, Props>(({ onSend, onAttach, disabled }, ref) => {
+export interface ChatInputHandle {
+  focusInput: (placeholder?: string) => void;
+  triggerFileUpload: () => void;
+}
+
+const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, onAttach, disabled }, ref) => {
   const [value, setValue] = useState("");
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [customPlaceholder, setCustomPlaceholder] = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  useImperativeHandle(ref, () => ({
+    focusInput: (placeholder?: string) => {
+      if (placeholder) setCustomPlaceholder(placeholder);
+      inputRef.current?.focus();
+    },
+    triggerFileUpload: () => {
+      fileRef.current?.click();
+    },
+  }));
 
   const handleSubmit = () => {
     const trimmed = value.trim();
     if (!trimmed && pendingFiles.length === 0) return;
     if (disabled) return;
 
-    // If we have files, send them first
+    // If we have files, send them (text will be sent as a follow-up message after upload)
     if (pendingFiles.length > 0 && onAttach) {
       const dt = new DataTransfer();
       pendingFiles.forEach((f) => dt.items.add(f));
       onAttach(dt.files);
       setPendingFiles([]);
-    }
-
-    if (trimmed) {
+      // Don't send text simultaneously — it causes SSE race conditions
+      if (trimmed) {
+        setValue("");
+        setTimeout(() => onSend(trimmed), 500);
+      }
+    } else if (trimmed) {
       onSend(trimmed);
       setValue("");
     }
+    setCustomPlaceholder(null);
     if (inputRef.current) inputRef.current.style.height = "auto";
     inputRef.current?.focus();
   };
@@ -54,7 +74,7 @@ const ChatInput = forwardRef<HTMLDivElement, Props>(({ onSend, onAttach, disable
   };
 
   return (
-    <div ref={ref} className="border-t border-border bg-card p-4">
+    <div className="border-t border-border bg-card p-4">
       {/* Pending files preview */}
       <AnimatePresence>
         {pendingFiles.length > 0 && (
@@ -103,9 +123,12 @@ const ChatInput = forwardRef<HTMLDivElement, Props>(({ onSend, onAttach, disable
         <textarea
           ref={inputRef}
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={(e) => {
+            setValue(e.target.value);
+            if (customPlaceholder) setCustomPlaceholder(null);
+          }}
           onKeyDown={handleKeyDown}
-          placeholder="Écrivez votre message..."
+          placeholder={customPlaceholder || "Ecrivez votre message..."}
           rows={1}
           disabled={disabled}
           className="flex-1 resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50"

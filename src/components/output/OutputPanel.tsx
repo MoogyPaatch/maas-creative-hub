@@ -1,18 +1,19 @@
 import { useState, useEffect, useRef } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+// AnimatePresence removed — instant tab switching is more reliable than animated transitions
 import CreativeBrief from "./CreativeBrief";
 import DCPresentation from "./DCPresentation";
 import DCCopyResult from "./DCCopyResult";
 import PPMPresentation from "./PPMPresentation";
 import CampaignGallery from "./CampaignGallery";
 import CreativeCanvas from "./CreativeCanvas";
+import DeclinaisonConfigurator from "./DeclinaisonConfigurator";
 import ValidationPanel from "./ValidationPanel";
 import BrandAssetsPanel from "./BrandAssetsPanel";
 import DeliveryPanel from "./DeliveryPanel";
 import LiveBriefPreview from "./LiveBriefPreview";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import type { ChatMessage, BrandAsset, BrandAssetCategory, ProductionAsset, BriefData, ClientBriefDraft } from "@/types";
-import { Sparkles, FolderOpen, PenTool, FileText, Palette, Film, Rocket, Package } from "lucide-react";
+import { Sparkles, FolderOpen, PenTool, FileText, Palette, Film, Rocket, Package, Image as ImageIcon, Settings2 } from "lucide-react";
 
 interface Props {
   artifacts: ChatMessage[];
@@ -25,6 +26,8 @@ interface Props {
   onSelectPiste?: (pisteId: string) => void;
   onApprove?: (id: string, feedback: string | null) => void;
   onReject?: (id: string, feedback: string) => void;
+  onLaunchDeclinaisons?: (config: Record<string, Record<string, boolean>>) => void;
+  onSkipDeclinaisons?: () => void;
   brandAssets?: BrandAsset[];
   onBrandAssetsChange?: (assets: BrandAsset[]) => void;
   highlightAssetCategories?: BrandAssetCategory[];
@@ -35,6 +38,8 @@ interface Props {
   isStreaming?: boolean;
   isValidatingBrief?: boolean;
   projectId?: string;
+  forceAssetsSignal?: number;
+  onAssetUploadComplete?: (filename: string) => void;
 }
 
 function briefToMarkdown(brief: BriefData): string {
@@ -69,10 +74,10 @@ const emptyStateByStep: Record<string, { icon: React.ElementType; title: string;
 const OutputPanel = ({
   artifacts, briefData, messages = [],
   clientBriefDraft, changedBriefFields, onClientBriefFieldChange, onValidateClientBrief,
-  onSelectPiste, onApprove, onReject,
+  onSelectPiste, onApprove, onReject, onLaunchDeclinaisons, onSkipDeclinaisons,
   brandAssets = [], onBrandAssetsChange, highlightAssetCategories,
   showAssetsTab = true, onBriefChange, currentStep, isClientView = false, isStreaming = false, isValidatingBrief = false,
-  projectId,
+  projectId, forceAssetsSignal, onAssetUploadComplete,
 }: Props) => {
   const agencyOnlyTypes = new Set(["creative_brief", "dc_copy_result"]);
 
@@ -87,12 +92,26 @@ const OutputPanel = ({
   typedArtifacts.forEach((a) => {
     if (a.metadata?.type === "creative_brief" && briefData) return;
     if (isClientView && agencyOnlyTypes.has(a.metadata!.type)) return;
+    if (a.metadata?.type === "validation_required") return; // Validation handled in chat, never show tab
     displayItems.push({ type: a.metadata!.type, content: a.metadata?.content, metadata: a.metadata });
   });
 
   const hasAssetsTab = showAssetsTab && onBrandAssetsChange;
   const galleryArtifact = displayItems.find(d => d.type === "campaign_gallery");
-  const galleryAssets: ProductionAsset[] = galleryArtifact?.metadata?.production_assets || [];
+  // Normalize backend asset fields (name→title, file_url→url) to frontend ProductionAsset format
+  const galleryAssets: ProductionAsset[] = (galleryArtifact?.metadata?.production_assets || []).map(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (a: any) => ({
+      id: a.id || `asset-${Math.random()}`,
+      type: a.type || a.asset_type || "image",
+      title: a.title || a.name || "Asset",
+      format: a.format || "",
+      url: a.url || a.file_url || "",
+      thumbnail_url: a.thumbnail_url,
+      duration: a.duration || (a.duration_seconds ? `${Math.round(a.duration_seconds)}s` : undefined),
+      file_size: a.file_size,
+    })
+  );
   const hasCanvasTab = galleryAssets.length > 0;
 
   // Show live brief when we have a draft or messages are flowing
@@ -121,6 +140,12 @@ const OutputPanel = ({
       setActiveTab(0);
     }
   }, [briefData]);
+
+  useEffect(() => {
+    if (forceAssetsSignal && forceAssetsSignal > 0 && hasAssetsTab) {
+      setActiveTab("assets");
+    }
+  }, [forceAssetsSignal]);
 
   const activeIndex = activeTab === "assets" || activeTab === "canvas" || activeTab === "live-brief" ? -1 : (activeTab as number);
   const active = activeIndex >= 0 ? displayItems[activeIndex] || null : null;
@@ -162,15 +187,16 @@ const OutputPanel = ({
     );
   }
 
-  const labels: Record<string, string> = {
-    creative_brief: "Brief Créa",
-    client_brief: "Brief Client",
-    dc_presentation: "Pistes DC",
-    dc_copy_result: "Copy",
-    ppm_presentation: "PPM",
-    campaign_gallery: "Campagne",
-    validation_required: "Validation",
-    delivery: "Livraison",
+  const labels: Record<string, { label: string; icon?: React.ElementType }> = {
+    creative_brief: { label: "Brief Créa", icon: FileText },
+    client_brief: { label: "Brief Client", icon: FileText },
+    dc_presentation: { label: "Pistes DC", icon: Sparkles },
+    dc_copy_result: { label: "Copy", icon: PenTool },
+    ppm_presentation: { label: "PPM", icon: Film },
+    campaign_gallery: { label: "Campagne", icon: ImageIcon },
+    declinaison_configurator: { label: "Declinaisons", icon: Settings2 },
+    validation_required: { label: "Validation" },
+    delivery: { label: "Livraison", icon: Package },
   };
 
   const assetCount = brandAssets.length;
@@ -184,69 +210,54 @@ const OutputPanel = ({
     <div className="flex h-full flex-col bg-background">
       <div className="flex-1 overflow-hidden">
         <ErrorBoundary>
-          <AnimatePresence mode="wait">
+          <div className="h-full">
             {activeTab === "live-brief" && showLiveBrief && (
-              <motion.div key="live-brief" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="h-full">
-                <LiveBriefPreview
-                  briefDraft={clientBriefDraft || defaultDraft}
-                  changedFields={changedBriefFields}
-                  onFieldChange={onClientBriefFieldChange}
-                  onValidate={onValidateClientBrief}
-                  isStreaming={isStreaming}
-                  isValidating={isValidatingBrief}
-                />
-              </motion.div>
+              <LiveBriefPreview
+                briefDraft={clientBriefDraft || defaultDraft}
+                changedFields={changedBriefFields}
+                onFieldChange={onClientBriefFieldChange}
+                onValidate={onValidateClientBrief}
+                isStreaming={isStreaming}
+                isValidating={isValidatingBrief}
+              />
             )}
-            {activeTab === "assets" && onBrandAssetsChange && (
-              <motion.div key="brand-assets" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }} className="h-full">
-                <BrandAssetsPanel assets={brandAssets} onAssetsChange={onBrandAssetsChange} highlightCategories={highlightAssetCategories} />
-              </motion.div>
+            {activeTab === "assets" && onBrandAssetsChange && projectId && (
+              <BrandAssetsPanel assets={brandAssets} onAssetsChange={onBrandAssetsChange} highlightCategories={highlightAssetCategories} projectId={projectId} onUploadComplete={onAssetUploadComplete} />
             )}
             {activeTab === "canvas" && hasCanvasTab && (
-              <motion.div key="canvas" initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.98 }} className="h-full">
-                <CreativeCanvas assets={galleryAssets} onBack={() => { const idx = displayItems.findIndex(d => d.type === "campaign_gallery"); setActiveTab(idx >= 0 ? idx : 0); }} />
-              </motion.div>
+              <CreativeCanvas assets={galleryAssets} onBack={() => { const idx = displayItems.findIndex(d => d.type === "campaign_gallery"); setActiveTab(idx >= 0 ? idx : 0); }} />
             )}
             {active?.type === "creative_brief" && active.content && (
-              <motion.div key={`brief-${activeIndex}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="h-full">
-                <CreativeBrief content={active.content} onContentChange={onBriefChange} readOnly={!onBriefChange} />
-              </motion.div>
+              <CreativeBrief content={active.content} onContentChange={onBriefChange} readOnly={!onBriefChange} />
             )}
             {active?.type === "dc_presentation" && active.metadata && (
-              <motion.div key={`dc-${activeIndex}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="h-full">
-                <DCPresentation metadata={active.metadata} onSelectPiste={onSelectPiste} />
-              </motion.div>
+              <DCPresentation metadata={active.metadata} onSelectPiste={onSelectPiste} />
             )}
             {active?.type === "dc_copy_result" && active.metadata && (
-              <motion.div key={`copy-${activeIndex}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="h-full">
-                <DCCopyResult metadata={active.metadata} />
-              </motion.div>
+              <DCCopyResult metadata={active.metadata} />
             )}
             {active?.type === "ppm_presentation" && active.metadata && (
-              <motion.div key={`ppm-${activeIndex}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="h-full">
-                <PPMPresentation metadata={active.metadata} projectId={projectId} />
-              </motion.div>
+              <PPMPresentation metadata={active.metadata} projectId={projectId} currentStep={currentStep} />
             )}
             {active?.type === "campaign_gallery" && active.metadata && (
-              <motion.div key={`gallery-${activeIndex}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="h-full">
-                <CampaignGallery metadata={active.metadata} onOpenCanvas={() => setActiveTab("canvas")} />
-              </motion.div>
+              <CampaignGallery metadata={active.metadata} onOpenCanvas={() => setActiveTab("canvas")} />
+            )}
+            {active?.type === "declinaison_configurator" && active.metadata && onLaunchDeclinaisons && onSkipDeclinaisons && (
+              <DeclinaisonConfigurator metadata={active.metadata} onLaunch={onLaunchDeclinaisons} onSkip={onSkipDeclinaisons} />
             )}
             {active?.type === "validation_required" && active.metadata && onApprove && onReject && (
-              <motion.div key={`validation-${activeIndex}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="flex h-full items-center justify-center p-8">
+              <div className="flex h-full items-center justify-center p-8">
                 <ValidationPanel gate={active.metadata.gate || ""} validationId={active.metadata.validation_id || ""} content={active.metadata.content || ""} onApprove={onApprove} onReject={onReject} />
-              </motion.div>
+              </div>
             )}
             {active?.type === "delivery" && active.metadata && (
-              <motion.div key={`delivery-${activeIndex}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="h-full">
-                <DeliveryPanel
-                  zipUrl={active.metadata.zip_url}
-                  assets={active.metadata.production_assets || []}
-                  campaignTitle={active.metadata.campaign_title}
-                />
-              </motion.div>
+              <DeliveryPanel
+                zipUrl={active.metadata.zip_url}
+                assets={active.metadata.production_assets || []}
+                campaignTitle={active.metadata.campaign_title}
+              />
             )}
-          </AnimatePresence>
+          </div>
         </ErrorBoundary>
       </div>
 
@@ -276,17 +287,22 @@ const OutputPanel = ({
                 {assetCount > 0 && <span className="ml-0.5 text-[10px]">({assetCount})</span>}
               </button>
             )}
-            {displayItems.map((item, i) => (
-              <button
-                key={i}
-                onClick={() => setActiveTab(i)}
-                className={`px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap ${
-                  activeTab === i ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {labels[item.type] || item.type}
-              </button>
-            ))}
+            {displayItems.map((item, i) => {
+              const info = labels[item.type];
+              const TabIcon = info?.icon;
+              return (
+                <button
+                  key={i}
+                  onClick={() => setActiveTab(i)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap ${
+                    activeTab === i ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {TabIcon && <TabIcon className="h-3 w-3" />}
+                  {info?.label || item.type}
+                </button>
+              );
+            })}
             {hasCanvasTab && (
               <button
                 onClick={() => setActiveTab("canvas")}

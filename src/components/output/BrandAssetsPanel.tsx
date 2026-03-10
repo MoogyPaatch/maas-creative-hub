@@ -1,66 +1,61 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Image, Package, FileText, Type, Palette, Upload, X } from "lucide-react";
+import { Image, Package, FileText, Type, Palette, Upload, X, Loader2 } from "lucide-react";
 import type { BrandAsset, BrandAssetCategory } from "@/types";
+import { uploadFile, mapBrandAsset } from "@/lib/api";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 interface Props {
   assets: BrandAsset[];
   onAssetsChange: (assets: BrandAsset[]) => void;
   highlightCategories?: BrandAssetCategory[];
+  projectId: string;
+  onUploadComplete?: (filename: string) => void;
 }
 
 const CATEGORIES: { key: BrandAssetCategory; label: string; icon: React.ElementType; description: string }[] = [
-  { key: "logo", label: "Logos", icon: Image, description: "SVG, PNG, AI — toutes déclinaisons" },
+  { key: "logo", label: "Logos", icon: Image, description: "SVG, PNG, AI — toutes declinaisons" },
   { key: "product", label: "Visuels produit", icon: Package, description: "Packshots, photos ambiance" },
-  { key: "guidelines", label: "Charte graphique", icon: FileText, description: "PDF, guidelines, DA" },
-  { key: "typography", label: "Typographies", icon: Type, description: "OTF, TTF, WOFF" },
-  { key: "graphics", label: "Éléments graphiques", icon: Palette, description: "Patterns, textures, pictos" },
+  { key: "guideline", label: "Charte graphique", icon: FileText, description: "PDF, guidelines, DA" },
+  { key: "font", label: "Typographies", icon: Type, description: "OTF, TTF, WOFF" },
+  { key: "other", label: "Autres", icon: Palette, description: "Patterns, textures, pictos, divers" },
 ];
 
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} o`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} Ko`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
-}
-
-const BrandAssetsPanel = ({ assets, onAssetsChange, highlightCategories }: Props) => {
+const BrandAssetsPanel = ({ assets, onAssetsChange, highlightCategories, projectId, onUploadComplete }: Props) => {
   const [expandedCat, setExpandedCat] = useState<BrandAssetCategory | null>("logo");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeCat, setActiveCat] = useState<BrandAssetCategory>("logo");
   const [dragOver, setDragOver] = useState<BrandAssetCategory | null>(null);
-  const objectUrlsRef = useRef<Set<string>>(new Set());
+  const [uploadingFiles, setUploadingFiles] = useState<Set<string>>(new Set());
 
-  // Cleanup object URLs on unmount
-  useEffect(() => {
-    return () => {
-      objectUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
-    };
-  }, []);
-
-  const handleFiles = useCallback((files: FileList, category: BrandAssetCategory) => {
-    const newAssets: BrandAsset[] = Array.from(files).map((file) => {
-      const url = URL.createObjectURL(file);
-      objectUrlsRef.current.add(url);
-      return {
-        id: `asset-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        category,
-        file_name: file.name,
-        file_size: formatSize(file.size),
-        file_type: file.type,
-        preview_url: url,
-        uploaded_at: new Date().toISOString(),
-      };
-    });
-    onAssetsChange([...assets, ...newAssets]);
-  }, [assets, onAssetsChange]);
+  const handleFiles = useCallback(async (files: FileList, category: BrandAssetCategory) => {
+    for (const file of Array.from(files)) {
+      if (file.size / (1024 * 1024) > 20) {
+        toast.error(`${file.name} depasse 20 MB`);
+        continue;
+      }
+      const tempId = `uploading-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      setUploadingFiles((prev) => new Set(prev).add(tempId));
+      try {
+        const uploadedAsset = await uploadFile(projectId, file, category);
+        const mapped = mapBrandAsset(uploadedAsset);
+        onAssetsChange([...assets, mapped]);
+        toast.success(`${file.name} envoye`);
+        onUploadComplete?.(file.name);
+      } catch {
+        toast.error(`Echec de l'upload de ${file.name}`);
+      } finally {
+        setUploadingFiles((prev) => {
+          const next = new Set(prev);
+          next.delete(tempId);
+          return next;
+        });
+      }
+    }
+  }, [assets, onAssetsChange, projectId]);
 
   const handleRemove = useCallback((id: string) => {
-    const asset = assets.find((a) => a.id === id);
-    if (asset) {
-      URL.revokeObjectURL(asset.preview_url);
-      objectUrlsRef.current.delete(asset.preview_url);
-    }
     onAssetsChange(assets.filter((a) => a.id !== id));
   }, [assets, onAssetsChange]);
 
@@ -81,6 +76,7 @@ const BrandAssetsPanel = ({ assets, onAssetsChange, highlightCategories }: Props
   };
 
   const totalCount = assets.length;
+  const isUploading = uploadingFiles.size > 0;
 
   return (
     <div className="flex h-full flex-col bg-background">
@@ -89,13 +85,15 @@ const BrandAssetsPanel = ({ assets, onAssetsChange, highlightCategories }: Props
           <div>
             <h2 className="text-lg font-semibold text-foreground">Assets de marque</h2>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              {totalCount} fichier{totalCount !== 1 ? "s" : ""} uploadé{totalCount !== 1 ? "s" : ""}
+              {totalCount} fichier{totalCount !== 1 ? "s" : ""} upload{totalCount !== 1 ? "s" : ""}
+              {isUploading && " — upload en cours..."}
             </p>
           </div>
+          {isUploading && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2" role="list" aria-label="Catégories d'assets">
+      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2" role="list" aria-label="Categories d'assets">
         {CATEGORIES.map((cat) => {
           const catAssets = assets.filter((a) => a.category === cat.key);
           const isExpanded = expandedCat === cat.key;
@@ -162,7 +160,7 @@ const BrandAssetsPanel = ({ assets, onAssetsChange, highlightCategories }: Props
                         onDragLeave={() => setDragOver(null)}
                         role="button"
                         tabIndex={0}
-                        aria-label={`Zone de dépôt pour ${cat.label}`}
+                        aria-label={`Zone de depot pour ${cat.label}`}
                         className={cn(
                           "flex flex-col items-center justify-center rounded-lg border-2 border-dashed py-5 transition-colors cursor-pointer",
                           dragOver === cat.key
@@ -189,7 +187,7 @@ const BrandAssetsPanel = ({ assets, onAssetsChange, highlightCategories }: Props
                             transition={{ delay: i * 0.05 }}
                             className="flex items-center gap-3 rounded-lg border border-border bg-background p-2"
                           >
-                            {asset.file_type.startsWith("image/") ? (
+                            {asset.file_type.startsWith("image/") && asset.preview_url ? (
                               <img
                                 src={asset.preview_url}
                                 alt={asset.file_name}
