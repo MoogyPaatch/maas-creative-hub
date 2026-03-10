@@ -7,6 +7,8 @@ import {
   ChevronRight,
   Maximize2,
   X,
+  Monitor,
+  Layers,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -174,6 +176,7 @@ const SlideShell = ({
 }: Props) => {
   const [current, setCurrent] = useState(0);
   const [fullscreen, setFullscreen] = useState(false);
+  const [embedMode, setEmbedMode] = useState(false);
   const touchRef = useRef<{ x: number; y: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -189,6 +192,8 @@ const SlideShell = ({
   // Keyboard navigation
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable) return;
       if (e.key === "ArrowLeft") prev();
       if (e.key === "ArrowRight") next();
       if (e.key === "Escape" && fullscreen) setFullscreen(false);
@@ -219,7 +224,16 @@ const SlideShell = ({
 
   const progress = ((current + 1) / slides.length) * 100;
 
-  const slideContent = (
+  const embedIframe = slidesUrl ? (
+    <iframe
+      src={slidesUrl}
+      className="h-full w-full border-0"
+      allowFullScreen
+      title="Présentation Office Online"
+    />
+  ) : null;
+
+  const slideContent = embedMode && embedIframe ? embedIframe : (
     <AnimatePresence mode="wait">
       <motion.div
         key={current}
@@ -258,13 +272,26 @@ const SlideShell = ({
       <div className="flex items-center gap-1.5 flex-shrink-0">
         {headerExtra}
         {slidesUrl && (
+          <button
+            onClick={() => setEmbedMode((v) => !v)}
+            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-medium transition ${
+              embedMode
+                ? "bg-primary/10 text-primary ring-1 ring-primary/30"
+                : "text-foreground/80 hover:bg-muted hover:text-foreground"
+            }`}
+          >
+            {embedMode ? <Layers className="h-3 w-3" /> : <Monitor className="h-3 w-3" />}
+            {embedMode ? "Contenu" : "Slides"}
+          </button>
+        )}
+        {slidesUrl && (
           <a
             href={slidesUrl}
             target="_blank"
             rel="noreferrer"
             className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-medium text-foreground/80 transition hover:bg-muted hover:text-foreground"
           >
-            <ExternalLink className="h-3 w-3" /> Slides
+            <ExternalLink className="h-3 w-3" />
           </a>
         )}
         {pptxUrl && (
@@ -322,12 +349,14 @@ const SlideShell = ({
 
         <div className="relative flex-1 overflow-hidden">
           {slideContent}
-          <NavButtons onPrev={prev} onNext={next} large />
+          {!embedMode && <NavButtons onPrev={prev} onNext={next} large />}
         </div>
 
-        <div className="flex items-center justify-center gap-4 border-t border-border py-3 bg-card/50 backdrop-blur-sm">
-          <Thumbnails slides={slides} current={current} onSelect={setCurrent} />
-        </div>
+        {!embedMode && (
+          <div className="flex items-center justify-center gap-4 border-t border-border py-3 bg-card/50 backdrop-blur-sm">
+            <Thumbnails slides={slides} current={current} onSelect={setCurrent} />
+          </div>
+        )}
       </motion.div>
     );
   }
@@ -343,31 +372,40 @@ const SlideShell = ({
       {headerBar(false)}
       {progressBar}
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar thumbnails */}
-        <div className="hidden w-32 flex-shrink-0 flex-col items-center gap-2 overflow-y-auto border-r border-border py-4 lg:flex scrollbar-thin">
-          <Thumbnails slides={slides} current={current} onSelect={setCurrent} />
-        </div>
-
-        {/* Slide area */}
-        <div className="relative flex-1 overflow-hidden">
+      {embedMode ? (
+        /* Embedded Office Online iframe — full area */
+        <div className="flex-1 overflow-hidden">
           {slideContent}
-          <NavButtons onPrev={prev} onNext={next} />
         </div>
-      </div>
+      ) : (
+        <>
+          <div className="flex flex-1 overflow-hidden">
+            {/* Sidebar thumbnails */}
+            <div className="hidden w-32 flex-shrink-0 flex-col items-center gap-2 overflow-y-auto border-r border-border py-4 lg:flex scrollbar-thin">
+              <Thumbnails slides={slides} current={current} onSelect={setCurrent} />
+            </div>
 
-      {/* Mobile: thumbnails + dots */}
-      <div className="flex flex-col items-center gap-2 border-t border-border bg-card/50 px-4 py-2 lg:hidden backdrop-blur-sm">
-        <div className="flex items-center gap-2 overflow-x-auto scrollbar-thin">
-          <Thumbnails slides={slides} current={current} onSelect={setCurrent} />
-        </div>
-        <ProgressDots total={slides.length} current={current} onSelect={setCurrent} />
-      </div>
+            {/* Slide area */}
+            <div className="relative flex-1 overflow-hidden">
+              {slideContent}
+              <NavButtons onPrev={prev} onNext={next} />
+            </div>
+          </div>
 
-      {/* Desktop: dots only */}
-      <div className="hidden lg:flex justify-center py-2 border-t border-border bg-card/50">
-        <ProgressDots total={slides.length} current={current} onSelect={setCurrent} />
-      </div>
+          {/* Mobile: thumbnails + dots */}
+          <div className="flex flex-col items-center gap-2 border-t border-border bg-card/50 px-4 py-2 lg:hidden backdrop-blur-sm">
+            <div className="flex items-center gap-2 overflow-x-auto scrollbar-thin">
+              <Thumbnails slides={slides} current={current} onSelect={setCurrent} />
+            </div>
+            <ProgressDots total={slides.length} current={current} onSelect={setCurrent} />
+          </div>
+
+          {/* Desktop: dots only */}
+          <div className="hidden lg:flex justify-center py-2 border-t border-border bg-card/50">
+            <ProgressDots total={slides.length} current={current} onSelect={setCurrent} />
+          </div>
+        </>
+      )}
     </div>
   );
 };
