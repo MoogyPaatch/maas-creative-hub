@@ -283,7 +283,11 @@ const ProjectPage = () => {
         getBrandAssets(id).then((assets) => {
           setBrandAssets(assets);
         }).catch(() => {});
-        getPPM(id).then((ppmData) => {
+        // B2 fix: only fetch PPM when project is at PPM phase or later
+        const currentPhase = status?.current_step || project.supervisor_phase || "commercial";
+        const PPM_PHASE_ORDER = ["commercial", "planner", "dc_visual", "dc_copy", "ppm", "prod_image", "prod_video", "prod_audio", "delivered"];
+        const currentPhaseIdx = PPM_PHASE_ORDER.indexOf(currentPhase);
+        if (currentPhaseIdx >= 4) getPPM(id).then((ppmData) => {
           if (ppmData) {
             const ppmMetadata = {
               type: "ppm_presentation" as const,
@@ -305,7 +309,7 @@ const ProjectPage = () => {
               return [...prev, { role: "agent", content: "", metadata: ppmMetadata }];
             });
           }
-        }).catch(() => {});
+        }).catch(() => {}); // end getPPM
         loadConversationsList();
 
         const currentStep = status?.current_step || project.supervisor_phase || "commercial";
@@ -317,7 +321,10 @@ const ProjectPage = () => {
 
         let conv: any = null;
         if (project.latest_conversation_id) {
-          conv = await getConversation(project.latest_conversation_id).catch(() => null);
+          conv = await getConversation(project.latest_conversation_id).catch((err) => {
+            console.warn("[B9] Failed to load conversation", project.latest_conversation_id, err);
+            return null;
+          });
         }
         if (!conv) {
           conv = await createConversation(id, isAgency, targetAgent);
@@ -520,40 +527,47 @@ const ProjectPage = () => {
         setThinking(null);
         setIsStreaming(false);
         if (id) {
-          getProjectStatus(id).then(setProjectStatus).catch(() => {});
+          getProjectStatus(id).then((freshStatus) => {
+            if (freshStatus) setProjectStatus(freshStatus);
+            // B2 fix: only fetch PPM after stream if project reached PPM phase
+            const phase = freshStatus?.current_step || "commercial";
+            const PPM_PHASES = ["ppm", "prod_image", "prod_video", "prod_audio", "delivered"];
+            if (PPM_PHASES.includes(phase)) {
+              getPPM(id).then((ppmData) => {
+                if (ppmData) {
+                  const ppmMetadata = {
+                    type: "ppm_presentation" as const,
+                    summary: `PPM – ${ppmData.status || "en cours"}`,
+                    storyboard: ppmData.frames || [],
+                    storyboard_count: (ppmData.frames || []).length,
+                    casting: ppmData.casting_direction || [],
+                    casting_count: (ppmData.casting_direction || []).length,
+                    settings: ppmData.settings_direction || [],
+                    settings_count: (ppmData.settings_direction || []).length,
+                    mockups: ppmData.finalized_mockups || [],
+                    mockup_count: (ppmData.finalized_mockups || []).length,
+                    production_notes: ppmData.production_notes || {},
+                    slides_url: null,
+                    pptx_url: null,
+                  };
+                  setArtifacts((prev) => {
+                    const idx = prev.findIndex((a) => a.metadata?.type === "ppm_presentation");
+                    const newArtifact: ChatMessage = { role: "agent", content: "", metadata: ppmMetadata };
+                    if (idx >= 0) {
+                      const updated = [...prev];
+                      updated[idx] = newArtifact;
+                      return updated;
+                    }
+                    return [...prev, newArtifact];
+                  });
+                }
+              }).catch(() => {});
+            }
+          }).catch(() => {});
           getBrief(id).then((brief) => {
             if (brief) {
               setBriefData(brief);
               setBriefId(brief.id);
-            }
-          }).catch(() => {});
-          getPPM(id).then((ppmData) => {
-            if (ppmData) {
-              const ppmMetadata = {
-                type: "ppm_presentation" as const,
-                summary: `PPM – ${ppmData.status || "en cours"}`,
-                storyboard: ppmData.frames || [],
-                storyboard_count: (ppmData.frames || []).length,
-                casting: ppmData.casting_direction || [],
-                casting_count: (ppmData.casting_direction || []).length,
-                settings: ppmData.settings_direction || [],
-                settings_count: (ppmData.settings_direction || []).length,
-                mockups: ppmData.finalized_mockups || [],
-                mockup_count: (ppmData.finalized_mockups || []).length,
-                production_notes: ppmData.production_notes || {},
-                slides_url: null,
-                pptx_url: null,
-              };
-              setArtifacts((prev) => {
-                const idx = prev.findIndex((a) => a.metadata?.type === "ppm_presentation");
-                const newArtifact: ChatMessage = { role: "agent", content: "", metadata: ppmMetadata };
-                if (idx >= 0) {
-                  const updated = [...prev];
-                  updated[idx] = newArtifact;
-                  return updated;
-                }
-                return [...prev, newArtifact];
-              });
             }
           }).catch(() => {});
         }
