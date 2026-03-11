@@ -50,16 +50,69 @@ const PANEL_ONLY_NOTIFS: Record<string, string> = {
 
 /** Map raw quick_reply IDs to user-friendly labels (for historical messages loaded from DB) */
 const QR_LABEL_MAP: Record<string, string> = {
+  // Welcome
   has_brief: "J'ai un brief",
+  vague_idea: "J'ai une idée vague",
+  no_idea: "Je ne sais pas par où commencer",
   describe_here: "Je décris ici",
   upload_brief: "J'envoie un document",
+  upload_file: "Envoyer un fichier",
+  // Guided questions
+  pub: "Publicité", social: "Réseaux sociaux", print: "Print", video: "Vidéo", audio: "Audio",
+  awareness: "Notoriété", conversion: "Conversion", engagement: "Engagement", launch: "Lancement produit",
+  b2b: "B2B", b2c: "B2C", general: "Grand public", niche: "Niche spécifique",
+  social_media_posts: "Posts réseaux sociaux", video_ads: "Publicités vidéo",
+  display_banners: "Bannières web", print_materials: "Supports imprimés", full_campaign: "Campagne complète",
+  small: "< 10K€", medium: "10K€ - 50K€", large: "50K€ - 100K€", enterprise: "> 100K€",
+  urgent: "< 2 semaines", normal: "2-4 semaines", relaxed: "1-2 mois", flexible: "Flexible",
+  // Confirmation / validation
+  confirm: "C'est bon, on continue",
+  add_details: "Je veux ajouter des détails",
   approve: "Approuver ✓",
   reject: "Demander des modifications",
   skip: "Passer",
   validate: "Valider",
-  launch_declinaisons: "Lancer les declinaisons",
-  skip_declinaisons: "Passer les declinaisons",
+  modify: "Je veux modifier",
+  // Brand & tone
+  yes_guidelines: "Oui, j'ai des documents",
+  no_guidelines: "Non, mais je peux vous expliquer",
+  skip_guidelines: "Pas pour l'instant",
+  tone_expert: "Expert & Sérieux",
+  tone_friendly: "Amical & Accessible",
+  tone_bold: "Audacieux & Innovant",
+  // Assets & uploads
+  yes_assets: "Oui, j'ai des fichiers",
+  no_assets: "Non, pas de visuels",
+  more_assets: "Oui, un autre fichier",
+  done_assets: "C'est tout bon",
+  // Products
+  yes_products: "Oui, j'ai des produits",
+  no_products: "Non, pas de produits",
+  more_products: "Oui, ajouter un autre",
+  done_products: "C'est tout bon",
+  // Casting & locations
+  yes_casting: "Oui, j'ai des visuels",
+  no_casting: "Non, passons",
+  more_casting: "Oui, ajouter un autre",
+  done_casting: "C'est tout bon",
+  // References
+  yes_refs: "Oui, j'ai des inspirations",
+  no_refs: "Non, je vous laisse faire",
+  more_refs: "Oui, une autre",
+  done_refs: "C'est fini",
+  // Qualification
+  je_ne_sais_pas: "Je ne sais pas",
+  valider_hypotheses: "Valider ces choix",
+  // Production
+  launch_declinaisons: "Lancer les déclinaisons",
+  skip_declinaisons: "Passer les déclinaisons",
 };
+
+/** Humanize unknown quick reply IDs: "vague_idea" → "Vague idea" */
+function humanizeQrId(id: string): string {
+  const text = id.replace(/_/g, " ").replace(/-/g, " ");
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
 
 /** Internal pipeline messages that should be hidden from the chat (noise for the user) */
 const INTERNAL_MSG_PATTERNS = [
@@ -295,8 +348,9 @@ const ProjectPage = () => {
               };
             }
             // Map raw quick_reply IDs to friendly labels for user messages
-            const displayContent = m.role === "user" && QR_LABEL_MAP[content.trim()]
-              ? QR_LABEL_MAP[content.trim()]
+            const trimmed = content.trim();
+            const displayContent = m.role === "user" && /^[a-z][a-z0-9_-]*$/.test(trimmed)
+              ? (QR_LABEL_MAP[trimmed] || humanizeQrId(trimmed))
               : content;
             return {
               role: m.role === "user" ? ("user" as const) : ("agent" as const),
