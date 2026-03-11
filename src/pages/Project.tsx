@@ -372,7 +372,7 @@ const ProjectPage = () => {
         // Restore artifacts and brief draft from message history (BUG 3 fix)
         const artifactTypes = [
           "creative_brief", "dc_presentation", "dc_copy_result",
-          "ppm_presentation", "campaign_gallery", "validation_required", "delivery"
+          "ppm_presentation", "campaign_gallery", "masters_review", "validation_required", "delivery"
         ];
         const restoredArtifacts: ChatMessage[] = [];
         let restoredBrief: Partial<ClientBriefDraft> = {};
@@ -511,7 +511,7 @@ const ProjectPage = () => {
 
         if (msg.metadata?.type && msg.metadata.type !== "client_brief_draft" && msg.metadata.type !== "status_update") {
           // Types that should only have one tab (replace existing on re-emit)
-          const SINGLETON_TYPES = new Set(["validation_required", "campaign_gallery", "dc_presentation", "ppm_presentation"]);
+          const SINGLETON_TYPES = new Set(["validation_required", "campaign_gallery", "dc_presentation", "ppm_presentation", "masters_review"]);
           setArtifacts((prev) => {
             if (msg.metadata?.type && SINGLETON_TYPES.has(msg.metadata.type)) {
               const without = prev.filter((a) => a.metadata?.type !== msg.metadata?.type);
