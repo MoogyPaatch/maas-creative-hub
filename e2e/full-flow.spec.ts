@@ -1,8 +1,8 @@
 import { test, expect, type Page } from "@playwright/test";
 
 const API_URL = process.env.VITE_API_URL || "http://localhost:8001/api";
-const AGENCY = { email: "agency@maas.fr", password: "Paatch" };
-const CLIENT = { email: "client@maas.fr", password: "Paatch" };
+const AGENCY = { email: process.env.E2E_AGENCY_EMAIL || "agency@maas.fr", password: process.env.E2E_PASSWORD || "" };
+const CLIENT = { email: process.env.E2E_CLIENT_EMAIL || "client@maas.fr", password: process.env.E2E_PASSWORD || "" };
 
 async function login(page: Page, creds: { email: string; password: string }) {
   await page.goto("/login");
