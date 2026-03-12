@@ -210,7 +210,7 @@ const OutputPanel = ({
     dc_presentation: { label: "Pistes DC", icon: Sparkles },
     dc_copy_result: { label: "Copy", icon: PenTool },
     ppm_presentation: { label: "PPM", icon: Film },
-    campaign_gallery: { label: "Campagne", icon: ImageIcon },
+    campaign_gallery: { label: "Détails", icon: ImageIcon },
     masters_review: { label: "Masters", icon: Package },
     declinaison_configurator: { label: "Declinaisons", icon: Settings2 },
 
