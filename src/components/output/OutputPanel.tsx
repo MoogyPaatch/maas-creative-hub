@@ -68,6 +68,7 @@ function briefToMarkdown(brief: BriefData): string {
 }
 
 const emptyStateByStep: Record<string, { icon: React.ElementType; title: string; desc: string }> = {
+  commercial: { icon: FileText, title: "Brief en cours…", desc: "Répondez aux questions de Marcel pour construire votre brief." },
   planner: { icon: Sparkles, title: "Stratégie en cours…", desc: "Marcel analyse votre brief et prépare les pistes créatives." },
   dc_visual: { icon: Palette, title: "Direction artistique…", desc: "Les pistes visuelles sont en cours de génération." },
   dc_copy: { icon: PenTool, title: "Copy en création…", desc: "Marcel rédige les messages et accroches de votre campagne." },
@@ -99,6 +100,17 @@ const OutputPanel = ({
     if (a.metadata?.type === "validation_required") return; // Validation handled in chat, never show tab
     if (a.metadata?.type === "asset_requirements") return; // Don't create separate tab — handled in BrandAssetsPanel
     displayItems.push({ type: a.metadata!.type, content: a.metadata?.content, metadata: a.metadata });
+  });
+
+  // Canonical tab ordering — guarantees stable position regardless of SSE arrival order
+  const TAB_ORDER = [
+    "creative_brief", "dc_presentation", "dc_copy_result", "ppm_presentation",
+    "masters_review", "declinaison_configurator", "campaign_gallery",
+  ];
+  displayItems.sort((a, b) => {
+    const ai = TAB_ORDER.indexOf(a.type);
+    const bi = TAB_ORDER.indexOf(b.type);
+    return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
   });
 
   const hasAssetsTab = showAssetsTab && onBrandAssetsChange;

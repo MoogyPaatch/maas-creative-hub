@@ -163,10 +163,13 @@ const MastersReview = ({ metadata, onApprove, onReject }: Props) => {
   const channels = (metadata.channels || {}) as Record<string, ChannelInfo>;
   const validationId = metadata.validation_id || "";
   const channelKeys = Object.keys(channels);
+  const alreadyValidated = !!metadata.already_validated;
 
   const [feedback, setFeedback] = useState("");
   const [showFeedback, setShowFeedback] = useState(false);
-  const [submitted, setSubmitted] = useState<"approved" | "rejected" | null>(null);
+  const [submitted, setSubmitted] = useState<"approved" | "rejected" | null>(
+    alreadyValidated ? "approved" : null,
+  );
   const [submittedFeedback, setSubmittedFeedback] = useState("");
   const [loading, setLoading] = useState(false);
 

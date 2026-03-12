@@ -166,18 +166,20 @@ const ProjectPage = () => {
 
   const pollRef = useRef<ReturnType<typeof setInterval>>();
 
-  // Handle SSE brief draft updates (null fields don't overwrite)
+  // Handle SSE brief draft updates (null clears the field, undefined is skipped)
   const handleBriefDraftUpdate = useCallback((draft: Partial<ClientBriefDraft>) => {
     const newChanged = new Set<string>();
     setClientBriefDraft((prev) => {
       const next = { ...prev };
       for (const [key, value] of Object.entries(draft)) {
-        if (value !== null && value !== undefined) {
-          if (next[key as keyof ClientBriefDraft] !== value) {
-            newChanged.add(key);
-          }
-          (next as any)[key] = value;
+        if (value === undefined) continue;
+        const k = key as keyof ClientBriefDraft;
+        // null → clear field, string → set field
+        const newVal = value === null ? null : value;
+        if (next[k] !== newVal) {
+          newChanged.add(key);
         }
+        (next as any)[k] = newVal;
       }
       return next;
     });
@@ -302,6 +304,9 @@ const ProjectPage = () => {
               mockups: ppmData.finalized_mockups || [],
               mockup_count: (ppmData.finalized_mockups || []).length,
               production_notes: ppmData.production_notes || {},
+              characters: ppmData.characters || ppmData.casting_direction || [],
+              products: ppmData.products || [],
+              locations: ppmData.locations || ppmData.settings_direction || [],
               slides_url: null,
               pptx_url: null,
             };
@@ -480,13 +485,34 @@ const ProjectPage = () => {
   }, [id]);
 
   const handleSSEStream = useCallback(async (stream: ReadableStream<Uint8Array> | null) => {
-    if (!stream) return;
+    if (!stream) {
+      toast.error("Pas de réponse du serveur. Réessayez.");
+      return;
+    }
     setIsStreaming(true);
     thinkingRef.current = { agentName: "Traitement", progress: 0, tasks: [{ label: "Traitement en cours...", status: "active" as const }], taskTotal: 0 };
     setThinking(thinkingRef.current);
+
+    // Wall-clock timeout: if stream produces nothing for 5 minutes, abort
+    const SSE_TIMEOUT_MS = 5 * 60 * 1000;
+    let sseTimeoutId: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+      toast.error("Le traitement a pris trop longtemps. Rafraîchissez la page.");
+      setIsStreaming(false);
+      setThinking(null);
+    }, SSE_TIMEOUT_MS);
+    const resetSseTimeout = () => {
+      if (sseTimeoutId) clearTimeout(sseTimeoutId);
+      sseTimeoutId = setTimeout(() => {
+        toast.error("Le traitement a pris trop longtemps. Rafraîchissez la page.");
+        setIsStreaming(false);
+        setThinking(null);
+      }, SSE_TIMEOUT_MS);
+    };
+
     await parseSSEStream(
       stream,
       (msg) => {
+        resetSseTimeout();
         thinkingRef.current = null;
         setThinking(null);
         const msgType = msg.metadata?.type;
@@ -535,6 +561,7 @@ const ProjectPage = () => {
         }
       },
       () => {
+        if (sseTimeoutId) { clearTimeout(sseTimeoutId); sseTimeoutId = null; }
         thinkingRef.current = null;
         setThinking(null);
         setIsStreaming(false);
@@ -547,23 +574,31 @@ const ProjectPage = () => {
             if (PPM_PHASES.includes(phase)) {
               getPPM(id).then((ppmData) => {
                 if (ppmData) {
-                  const ppmMetadata = {
-                    type: "ppm_presentation" as const,
-                    summary: `PPM – ${ppmData.status || "en cours"}`,
-                    storyboard: ppmData.frames || [],
-                    storyboard_count: (ppmData.frames || []).length,
-                    casting: ppmData.casting_direction || [],
-                    casting_count: (ppmData.casting_direction || []).length,
-                    settings: ppmData.settings_direction || [],
-                    settings_count: (ppmData.settings_direction || []).length,
-                    mockups: ppmData.finalized_mockups || [],
-                    mockup_count: (ppmData.finalized_mockups || []).length,
-                    production_notes: ppmData.production_notes || {},
-                    slides_url: null,
-                    pptx_url: null,
-                  };
                   setArtifacts((prev) => {
                     const idx = prev.findIndex((a) => a.metadata?.type === "ppm_presentation");
+                    const existing = idx >= 0 ? prev[idx].metadata : null;
+                    // Merge DB data with any SSE-provided metadata (preserve slides URLs, entity images, etc.)
+                    const ppmMetadata = {
+                      ...(existing || {}),
+                      type: "ppm_presentation" as const,
+                      summary: existing?.summary || `PPM – ${ppmData.status || "en cours"}`,
+                      storyboard: existing?.storyboard?.length ? existing.storyboard : (ppmData.frames || []),
+                      storyboard_count: existing?.storyboard_count || (ppmData.frames || []).length,
+                      casting: existing?.casting?.length ? existing.casting : (ppmData.casting_direction || []),
+                      casting_count: existing?.casting_count || (ppmData.casting_direction || []).length,
+                      settings: existing?.settings?.length ? existing.settings : (ppmData.settings_direction || []),
+                      settings_count: existing?.settings_count || (ppmData.settings_direction || []).length,
+                      mockups: existing?.mockups?.length ? existing.mockups : (ppmData.finalized_mockups || []),
+                      mockup_count: existing?.mockup_count || (ppmData.finalized_mockups || []).length,
+                      production_notes: existing?.production_notes || ppmData.production_notes || {},
+                      // Visual entity library (with image_url)
+                      characters: existing?.characters?.length ? existing.characters : (ppmData.characters || ppmData.casting_direction || []),
+                      products: existing?.products?.length ? existing.products : (ppmData.products || []),
+                      locations: existing?.locations?.length ? existing.locations : (ppmData.locations || ppmData.settings_direction || []),
+                      // Preserve SSE-provided URLs — DB doesn't have them
+                      slides_url: existing?.slides_url || null,
+                      pptx_url: existing?.pptx_url || null,
+                    };
                     const newArtifact: ChatMessage = { role: "agent", content: "", metadata: ppmMetadata };
                     if (idx >= 0) {
                       const updated = [...prev];
@@ -585,6 +620,7 @@ const ProjectPage = () => {
         }
       },
       (event: ThinkingEvent) => {
+        resetSseTimeout();
         const next = accumulateThinking(thinkingRef.current, event);
         thinkingRef.current = next;
         setThinking(next);

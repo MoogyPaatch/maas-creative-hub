@@ -22,7 +22,12 @@ const ValidationPanel = ({ gate, validationId, content, onApprove, onReject }: P
   const gateLabels: Record<string, string> = {
     brief_creatif: "Brief Créatif",
     dc_visual: "Direction Créative",
+    piste_creative: "Direction Créative",
     ppm: "Pré-Production",
+    ppm_valide: "Pré-Production",
+    masters: "Validation Masters",
+    assets_finaux: "Assets Finaux",
+    asset_upload: "Upload Assets",
   };
 
   const handleApprove = async () => {

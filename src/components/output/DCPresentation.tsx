@@ -368,12 +368,15 @@ const DCPresentation = ({ metadata, onSelectPiste }: Props) => {
 
   const slides: SlideItem[] = useMemo(
     () =>
-      pistes.map((piste, i) => {
-        const color = pisteColor(piste.title, i);
+      pistes
+        .filter((p) => p && (p.title || p.concept))
+        .map((piste, i) => {
+        const safeTitle = piste.title || piste.concept || `Piste ${i + 1}`;
+        const color = pisteColor(safeTitle, i);
         const isRecommended = recommendation?.recommended_piste === i + 1;
 
         return {
-          title: piste.title,
+          title: safeTitle,
           color: `${color.replace(")", "/0.3)")}`,
           content: (
             <PisteSlide

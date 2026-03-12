@@ -221,7 +221,7 @@ function extractProducts(metadata: MessageMetadata): R[] {
 function extractLocations(metadata: MessageMetadata): R[] {
   const raw = (metadata.locations || metadata.settings || []) as R[];
   if (!Array.isArray(raw)) return [];
-  return raw;
+  return raw.slice(0, 4); // Max 4 décors
 }
 
 /* ── Sub-Tab Type ── */
@@ -932,15 +932,9 @@ const PPMPresentation = ({ metadata, projectId, currentStep, onPPMApprove }: Pro
   const tabs = useMemo(() => {
     const t: { id: PPMSubTab; label: string; icon: React.ElementType; count?: number }[] = [];
     t.push({ id: "storyboard", label: "Storyboard", icon: Film, count: storyboard.length || undefined });
-    if (characters.length > 0) {
-      t.push({ id: "casting", label: "Casting", icon: Users, count: characters.length });
-    }
-    if (products.length > 0) {
-      t.push({ id: "products", label: "Produits", icon: Package, count: products.length });
-    }
-    if (locations.length > 0) {
-      t.push({ id: "locations", label: "Decors", icon: MapPin, count: locations.length });
-    }
+    t.push({ id: "casting", label: "Casting", icon: Users, count: characters.length || undefined });
+    t.push({ id: "products", label: "Produits", icon: Package, count: products.length || undefined });
+    t.push({ id: "locations", label: "Decors", icon: MapPin, count: locations.length || undefined });
     if (hasFormats) {
       t.push({ id: "formats", label: "Formats", icon: Layers });
     }
@@ -954,25 +948,73 @@ const PPMPresentation = ({ metadata, projectId, currentStep, onPPMApprove }: Pro
 
   const projectTitle = videoSpecs?.project_title || metadata.campaign_title || "";
 
-  return (
-    <div className="flex h-full flex-col bg-background">
-      {/* Header */}
-      <div className="border-b border-border px-6 py-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15">
-            <FileText className="h-5 w-5 text-primary" />
-          </div>
-          <div className="flex-1">
-            <h2 className="text-lg font-bold tracking-tight text-foreground">
-              {projectTitle || "Dossier PPM"}
-            </h2>
-            <p className="text-xs text-muted-foreground">Pre-Production Meeting</p>
-          </div>
+  const [fullscreen, setFullscreen] = useState(false);
+  const pptxUrl = metadata.pptx_url;
+  const slidesUrl = metadata.slides_url;
+
+  const ppmContent = (isFS: boolean) => (
+    <div className={`flex flex-col bg-background ${isFS ? "fixed inset-0 z-50" : "h-full"}`}>
+      {/* Compact toolbar — matches DC SlideShell style */}
+      <div className={`flex items-center justify-between gap-3 px-5 py-2.5 ${
+        isFS
+          ? "bg-background/60 backdrop-blur-md border-b border-border"
+          : "border-b border-border bg-card/50 backdrop-blur-sm"
+      }`}>
+        <div className="flex items-center gap-2.5 min-w-0">
+          <FileText className="h-4 w-4 text-primary flex-shrink-0" />
+          <span className="text-sm font-bold text-foreground truncate">
+            {projectTitle || "Dossier PPM"}
+          </span>
+          <span className="text-xs text-muted-foreground">Pre-Production Meeting</span>
+        </div>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {slidesUrl && (
+            <a
+              href={slidesUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-medium text-foreground/80 transition hover:bg-muted hover:text-foreground"
+            >
+              <Monitor className="h-3 w-3" /> Slides
+            </a>
+          )}
+          {slidesUrl && (
+            <a
+              href={slidesUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-medium text-foreground/80 transition hover:bg-muted hover:text-foreground"
+            >
+              <ExternalLink className="h-3 w-3" />
+            </a>
+          )}
+          {pptxUrl && (
+            <a
+              href={pptxUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-medium text-foreground/80 transition hover:bg-muted hover:text-foreground"
+            >
+              <Download className="h-3 w-3" /> PPTX
+            </a>
+          )}
+          {isFS ? (
+            <button
+              onClick={() => setFullscreen(false)}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-medium text-foreground/80 transition hover:bg-muted hover:text-foreground"
+            >
+              <X className="h-3.5 w-3.5" /> Fermer
+            </button>
+          ) : (
+            <button
+              onClick={() => setFullscreen(true)}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-medium text-foreground/80 transition hover:bg-muted hover:text-foreground"
+            >
+              <Maximize2 className="h-3 w-3" />
+            </button>
+          )}
         </div>
       </div>
-
-      {/* Action bar: download PPTX, view slides */}
-      <PPMActionBar metadata={metadata} />
 
       {/* Sub-tabs */}
       <div className="flex gap-1 overflow-x-auto border-b border-border px-4 py-2 scrollbar-thin">
@@ -1038,6 +1080,13 @@ const PPMPresentation = ({ metadata, projectId, currentStep, onPPMApprove }: Pro
       {/* Approval footer */}
       {showApproval && <PPMApprovalFooter projectId={projectId!} onPPMApprove={onPPMApprove} />}
     </div>
+  );
+
+  return (
+    <>
+      {ppmContent(false)}
+      {fullscreen && ppmContent(true)}
+    </>
   );
 };
 

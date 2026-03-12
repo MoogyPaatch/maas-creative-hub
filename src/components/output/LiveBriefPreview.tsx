@@ -223,7 +223,7 @@ const LiveBriefPreview = ({
               {isValidating ? "Validation..." : "Valider le Brief"}
             </button>
             {!canValidate && (
-              <p className="mt-2 text-[10px] text-muted-foreground text-center absolute -bottom-6">
+              <p className="mt-3 text-[10px] text-muted-foreground text-center">
                 Les 5 champs obligatoires (*) doivent être remplis
               </p>
             )}
