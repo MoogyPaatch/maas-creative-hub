@@ -10,6 +10,7 @@ import {
   ChevronDown,
   ChevronUp,
   TrendingUp,
+  LayoutGrid,
 } from "lucide-react";
 import SlideShell, { type SlideItem } from "./SlideShell";
 import ImageWithFallback from "@/components/ui/ImageWithFallback";
@@ -257,6 +258,26 @@ function PisteSlide({
           <Section label="Justification stratégique" text={piste.justification} />
           {piste.differentiation && (
             <Section label="Différenciation" text={piste.differentiation} />
+          )}
+
+          {/* Format executions — how the piste declines per media */}
+          {piste.format_executions && Object.keys(piste.format_executions).length > 0 && (
+            <div className="rounded-lg border border-border/40 bg-muted/5 px-4 py-3">
+              <div className="flex items-center gap-1.5 mb-2">
+                <LayoutGrid className="h-3 w-3 text-muted-foreground" />
+                <h4 className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">
+                  Declinaisons par format
+                </h4>
+              </div>
+              <div className="space-y-1.5">
+                {Object.entries(piste.format_executions).map(([format, desc]) => (
+                  <div key={format} className="flex gap-2 text-[13px] leading-relaxed">
+                    <span className="font-semibold text-foreground/70 capitalize shrink-0">{format}</span>
+                    <span className="text-foreground/80">{desc}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
 
           {/* Video concept — one-line teaser only (full details in PPM) */}
