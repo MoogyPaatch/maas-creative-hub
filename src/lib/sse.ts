@@ -10,7 +10,7 @@ export interface ThinkingEvent {
   taskIndex: number;
   /** Total number of tasks in the agent phase */
   taskTotal: number;
-  /** Progress percentage 0-100, monotonically increasing within a phase */
+  /** Progress percentage 0-100, globally monotonic across the full pipeline */
   progress: number;
 }
 

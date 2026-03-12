@@ -16,6 +16,8 @@ export interface Project {
   id: string;
   client_name: string | null;
   status: string;
+  thumbnail_url: string | null;
+  is_archived: boolean;
   supervisor_phase: string | null;
   pending_validation: boolean;
   created_at: string;
@@ -181,6 +183,11 @@ export interface ChatMessageMetadata {
   campaign_title?: string;
   zip_url?: string;
   requested_asset_categories?: BrandAssetCategory[];
+  // Epic 41: asset_requirements fields
+  required_assets?: AssetRequirement[];
+  detected_brand_elements?: DetectedBrandElement[];
+  missing_categories?: BrandAssetCategory[];
+  summary_message?: string;
   // status_update fields
   status?: string;
   phase_label?: string;
@@ -207,6 +214,8 @@ export interface DCPiste {
   risk_level?: "safe" | "bold" | "provocateur";
   agency_conviction?: string;
   differentiation?: string;
+  constat?: string;
+  dispositif?: string;
   format_executions?: {
     social?: string;
     print?: string;
@@ -263,6 +272,23 @@ export interface BrandAsset {
   file_type: string;
   preview_url: string;
   uploaded_at: string;
+}
+
+// ── Epic 41: Asset Requirements ──────────────────────────────────────────
+
+export interface AssetRequirement {
+  category: BrandAssetCategory;
+  description: string;
+  priority: "obligatoire" | "recommande" | "optionnel";
+  already_covered: boolean;
+  covered_by?: string;
+}
+
+export interface DetectedBrandElement {
+  name: string;
+  type: string;
+  source: string;
+  description: string;
 }
 
 export interface ProductionAsset {

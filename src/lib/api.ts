@@ -66,8 +66,16 @@ export async function getMe() {
 }
 
 // Projects
-export async function getProjects() {
-  return request<any[]>("/projects");
+export async function getProjects(includeArchived = false) {
+  const qs = includeArchived ? "?include_archived=true" : "";
+  return request<any[]>(`/projects${qs}`);
+}
+
+export async function archiveProject(projectId: string, archive: boolean) {
+  return request<any>(`/projects/${projectId}/archive`, {
+    method: "PATCH",
+    body: JSON.stringify({ is_archived: archive }),
+  });
 }
 
 export async function getProject(id: string) {

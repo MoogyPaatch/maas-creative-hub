@@ -56,11 +56,21 @@ export function accumulateThinking(
   const agentName = event.agentName || "Traitement";
   const progress = event.progress || 0;
 
-  // If agent changed, start fresh
-  if (!prev || prev.agentName !== agentName) {
+  // No previous state — start fresh
+  if (!prev) {
     return {
       agentName,
       progress,
+      taskTotal: event.taskTotal || 0,
+      tasks: [{ label: event.label, status: "active" }],
+    };
+  }
+
+  // Agent changed — new task list but KEEP max progress (globally monotonic)
+  if (prev.agentName !== agentName) {
+    return {
+      agentName,
+      progress: Math.max(prev.progress, progress),
       taskTotal: event.taskTotal || 0,
       tasks: [{ label: event.label, status: "active" }],
     };

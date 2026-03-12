@@ -65,7 +65,9 @@ const ChatMessageBubble = ({ message, showQuickReplies, onQuickReply, onFocusInp
               : "bg-chat-agent text-chat-agent-foreground rounded-bl-md hover:shadow-md"
           }`}
         >
-          <div className="prose prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-li:my-0.5 [&_*]:!text-inherit [&_a]:!text-primary">
+          <div className={`prose prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-li:my-0.5 [&_*]:!text-inherit ${
+            isUser ? "prose-invert [&_a]:!text-blue-300" : "[&_a]:!text-primary"
+          }`}>
             <ReactMarkdown>{message.content}</ReactMarkdown>
           </div>
         </div>

@@ -1,12 +1,13 @@
 import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { getProjects, createConversation } from "@/lib/api";
+import { getProjects, createConversation, archiveProject, createShareLink, downloadDossierPDF } from "@/lib/api";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import {
   Plus, Clock, CheckCircle2, AlertCircle, Loader2, Search, Filter,
   LayoutGrid, Columns3, AlertTriangle, ArrowRight, LogOut, Bell, ChevronRight,
+  Archive, ArchiveRestore, Share2, Download, MoreHorizontal,
 } from "lucide-react";
 import { WORKFLOW_STEPS, CLIENT_PHASES, getClientPhaseIndex, getClientPhaseLabel } from "@/types";
 import type { Project } from "@/types";
@@ -54,6 +55,57 @@ function timeAgo(dateStr: string): string {
   const days = Math.floor(hours / 24);
   if (days < 7) return `il y a ${days}j`;
   return new Date(dateStr).toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+}
+
+// ── Project Visuals (deterministic gradient per brand) ───────────────────
+
+const PROJECT_GRADIENTS = [
+  "linear-gradient(135deg, #6366f1 0%, #a855f7 100%)",
+  "linear-gradient(135deg, #ec4899 0%, #f43f5e 100%)",
+  "linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%)",
+  "linear-gradient(135deg, #10b981 0%, #14b8a6 100%)",
+  "linear-gradient(135deg, #f59e0b 0%, #ef4444 100%)",
+  "linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%)",
+  "linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%)",
+  "linear-gradient(135deg, #f97316 0%, #eab308 100%)",
+  "linear-gradient(135deg, #14b8a6 0%, #22c55e 100%)",
+  "linear-gradient(135deg, #e11d48 0%, #be185d 100%)",
+  "linear-gradient(135deg, #7c3aed 0%, #2563eb 100%)",
+  "linear-gradient(135deg, #059669 0%, #0891b2 100%)",
+];
+
+function hashString(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash);
+}
+
+function getProjectGradient(name: string): string {
+  if (!name || name === "Nouvelle campagne") {
+    return "linear-gradient(135deg, #94a3b8 0%, #64748b 100%)";
+  }
+  return PROJECT_GRADIENTS[hashString(name) % PROJECT_GRADIENTS.length];
+}
+
+function getProjectBackground(name: string, thumbnailUrl: string | null | undefined): React.CSSProperties {
+  if (thumbnailUrl) {
+    return {
+      backgroundImage: `url(${thumbnailUrl})`,
+      backgroundSize: "cover",
+      backgroundPosition: "center",
+    };
+  }
+  return { background: getProjectGradient(name) };
+}
+
+function getInitials(name: string): string {
+  if (!name || name === "Nouvelle campagne") return "?";
+  const cleaned = name.replace(/[—–\-()]/g, " ").replace(/\s+/g, " ").trim();
+  const words = cleaned.split(" ").filter((w) => w.length > 0);
+  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+  return (name[0] || "?").toUpperCase();
 }
 
 // ── Client Stepper (4 étapes) ───────────────────────────────────────────
@@ -112,12 +164,15 @@ const ClientStepper = ({ phase }: { phase: string | null }) => {
 
 // ── Client Dashboard ────────────────────────────────────────────────────
 
+type ClientTab = "all" | "actions" | "done" | "archived";
+
 const ClientDashboard = ({
   projects,
   loading,
   creating,
   onNew,
   onOpen,
+  onRefresh,
   userName,
 }: {
   projects: Project[];
@@ -125,26 +180,118 @@ const ClientDashboard = ({
   creating: boolean;
   onNew: () => void;
   onOpen: (id: string) => void;
+  onRefresh: () => void;
   userName: string | null;
 }) => {
-  const pendingProjects = projects.filter((p) => p.pending_validation);
-  const activeProject = projects.find((p) => p.status === "active") || projects[0];
-  const otherProjects = projects.filter((p) => p.id !== activeProject?.id);
+  const [tab, setTab] = useState<ClientTab>("all");
+  const [tabInitialized, setTabInitialized] = useState(false);
+  const [archivedProjects, setArchivedProjects] = useState<Project[]>([]);
+  const [archivedLoading, setArchivedLoading] = useState(false);
+  const [archivedLoaded, setArchivedLoaded] = useState(false);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   const firstName = userName?.split(" ")[0] || userName?.split("@")[0] || "Client";
 
+  const activeProjects = projects.filter((p) => !p.is_archived);
+  const pendingProjects = activeProjects.filter((p) => p.pending_validation);
+  const doneProjects = activeProjects.filter(
+    (p) => p.supervisor_phase === "delivered" || p.supervisor_phase === "finished" || p.status === "completed"
+  );
+  const inProgressProjects = activeProjects.filter(
+    (p) => p.supervisor_phase !== "delivered" && p.supervisor_phase !== "finished" && p.status !== "completed"
+  );
+
   const pendingCount = pendingProjects.length;
-  const subtitle = pendingCount > 0
-    ? `${pendingCount} action${pendingCount > 1 ? "s" : ""} en attente`
-    : "Tous vos projets sont à jour";
+
+  // Auto-switch to "actions" tab on first load if there are pending items
+  useEffect(() => {
+    if (!tabInitialized && projects.length > 0) {
+      setTabInitialized(true);
+      if (pendingCount > 0) setTab("actions");
+    }
+  }, [projects.length, pendingCount, tabInitialized]);
+
+  // Lazy-load archived projects when tab is selected
+  useEffect(() => {
+    if (tab === "archived" && !archivedLoaded && !archivedLoading) {
+      setArchivedLoading(true);
+      getProjects(true)
+        .then((all) => {
+          setArchivedProjects(all.filter((p: Project) => p.is_archived));
+          setArchivedLoaded(true);
+        })
+        .catch(() => toast.error("Impossible de charger les archives"))
+        .finally(() => setArchivedLoading(false));
+    }
+  }, [tab, archivedLoaded, archivedLoading]);
+
+  const displayed = tab === "actions"
+    ? pendingProjects
+    : tab === "done"
+    ? doneProjects
+    : tab === "archived"
+    ? archivedProjects
+    : activeProjects;
+
+  const sorted = [...displayed].sort(
+    (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+  );
+
+  const handleArchive = async (e: React.MouseEvent, projectId: string, archive: boolean) => {
+    e.stopPropagation();
+    try {
+      await archiveProject(projectId, archive);
+      toast.success(archive ? "Projet archiv\u00e9" : "Projet restaur\u00e9");
+      setArchivedLoaded(false);
+      onRefresh();
+    } catch {
+      toast.error("Erreur lors de l'archivage");
+    }
+  };
+
+  const handleShare = async (e: React.MouseEvent, projectId: string) => {
+    e.stopPropagation();
+    try {
+      const result = await createShareLink(projectId);
+      await navigator.clipboard.writeText(result.share_url);
+      toast.success("Lien de partage copi\u00e9 !");
+    } catch {
+      toast.error("Erreur lors du partage");
+    }
+  };
+
+  const handleDownload = async (e: React.MouseEvent, projectId: string, projectName: string) => {
+    e.stopPropagation();
+    try {
+      const blob = await downloadDossierPDF(projectId);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${projectName || "dossier"}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("T\u00e9l\u00e9chargement lanc\u00e9");
+    } catch {
+      toast.error("Dossier non disponible");
+    }
+  };
 
   if (loading) {
     return (
       <div className="space-y-6">
         <Skeleton className="h-10 w-64" />
-        <Skeleton className="h-48 w-full" />
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {[0, 1, 2].map((i) => <Skeleton key={i} className="h-24 w-full" />)}
+        <Skeleton className="h-10 w-80" />
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="border border-border overflow-hidden">
+              <Skeleton className="h-28 w-full rounded-none" />
+              <div className="p-5 space-y-3">
+                <Skeleton className="h-5 w-40" />
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-24" />
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     );
@@ -157,7 +304,7 @@ const ClientDashboard = ({
           <h1 className="text-4xl font-bold tracking-tight text-foreground">
             Bienvenue, {firstName}
           </h1>
-          <p className="mt-2 text-sm text-muted-foreground">Créez votre première campagne pour commencer</p>
+          <p className="mt-2 text-sm text-muted-foreground">Cr\u00e9ez votre premi\u00e8re campagne pour commencer</p>
         </div>
         <motion.div
           initial={{ opacity: 0 }}
@@ -177,18 +324,32 @@ const ClientDashboard = ({
     );
   }
 
+  const isArchiveTab = tab === "archived";
+
   return (
-    <div className="space-y-10">
-      {/* Welcome header */}
+    <div className="space-y-8">
+      {/* Welcome header + stats */}
       <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-4xl font-bold tracking-tight text-foreground">
             Bienvenue, {firstName}
           </h1>
-          <p className="mt-2 text-sm text-muted-foreground flex items-center gap-2">
-            {pendingCount > 0 && <Bell className="h-3.5 w-3.5 text-accent" />}
-            {subtitle}
-          </p>
+          <div className="mt-3 flex items-center gap-6">
+            {pendingCount > 0 && (
+              <button onClick={() => setTab("actions")} className="flex items-center gap-2 text-sm font-medium text-amber-600 hover:text-amber-700 transition-colors">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                {pendingCount} en attente
+              </button>
+            )}
+            <span className="text-sm text-muted-foreground">
+              {inProgressProjects.length} en cours
+            </span>
+            {doneProjects.length > 0 && (
+              <span className="text-sm text-muted-foreground">
+                {doneProjects.length} livr\u00e9{doneProjects.length > 1 ? "s" : ""}
+              </span>
+            )}
+          </div>
         </div>
         <button
           onClick={onNew}
@@ -201,107 +362,187 @@ const ClientDashboard = ({
         </button>
       </div>
 
-      {/* Action required banner */}
-      {pendingProjects.length > 0 && (
-        <div className="space-y-3">
-          {pendingProjects.map((p) => (
-            <motion.div
-              key={p.id}
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              onClick={() => onOpen(p.id)}
-              className="flex items-center justify-between gap-4 border-2 border-accent bg-accent/5 p-5 cursor-pointer transition-colors hover:bg-accent/10"
-            >
-              <div className="flex items-center gap-3">
-                <div className="flex h-8 w-8 items-center justify-center bg-accent/10">
-                  <AlertTriangle className="h-4 w-4 text-accent" />
-                </div>
-                <div>
-                  <p className="text-sm font-bold text-foreground">
-                    {p.client_name || "Nouvelle campagne"}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Validation en attente</p>
-                </div>
-              </div>
-              <ChevronRight className="h-4 w-4 text-accent" />
-            </motion.div>
-          ))}
+      {/* Tabs */}
+      <div className="flex gap-0 border-b border-border">
+        {([
+          { key: "all" as ClientTab, label: "Mes campagnes", count: activeProjects.length },
+          { key: "actions" as ClientTab, label: "Actions requises", count: pendingCount, highlight: true },
+          { key: "done" as ClientTab, label: "Termin\u00e9s", count: doneProjects.length },
+          { key: "archived" as ClientTab, label: "Archiv\u00e9s", count: archivedProjects.length, icon: Archive },
+        ]).map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`relative px-5 py-3 text-sm font-bold transition-colors flex items-center gap-1.5 ${
+              tab === t.key
+                ? "text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {"icon" in t && t.icon && <t.icon className="h-3.5 w-3.5" />}
+            {t.label}
+            {t.count > 0 && (
+              <span
+                className={`ml-1 inline-flex h-5 min-w-5 items-center justify-center px-1.5 text-[10px] font-bold ${
+                  "highlight" in t && t.highlight && t.count > 0
+                    ? "bg-foreground text-background"
+                    : "bg-secondary text-muted-foreground"
+                }`}
+              >
+                {t.count}
+              </span>
+            )}
+            {tab === t.key && (
+              <motion.div
+                layoutId="client-tab-indicator"
+                className="absolute bottom-0 left-0 right-0 h-0.5 bg-foreground"
+              />
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Project grid */}
+      {(isArchiveTab && archivedLoading) ? (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
-      )}
-
-      {/* Hero card — active project */}
-      {activeProject && (
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.05 }}
-          onClick={() => onOpen(activeProject.id)}
-          className="group cursor-pointer border border-border p-8 transition-all hover:border-foreground"
-        >
-          <div className="flex items-center justify-between mb-6">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-              Projet actif
-            </span>
-            <span className="text-xs text-muted-foreground">
-              {timeAgo(activeProject.updated_at)}
-            </span>
-          </div>
-
-          <h2 className="text-2xl font-bold text-foreground group-hover:text-accent transition-colors mb-6">
-            {activeProject.client_name || "Nouvelle campagne"}
-          </h2>
-
-          <ClientStepper phase={activeProject.supervisor_phase} />
-
-          <div className="mt-6 flex items-center justify-between">
-            <span className="text-xs text-muted-foreground font-medium">
-              {getClientPhaseLabel(activeProject.supervisor_phase)}
-            </span>
-            <span className="flex items-center gap-2 text-sm font-bold text-foreground group-hover:text-accent transition-colors">
-              Continuer
-              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-            </span>
-          </div>
-        </motion.div>
-      )}
-
-      {/* Other projects — compact grid */}
-      {otherProjects.length > 0 && (
-        <div>
-          <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4">
-            Autres projets
-          </h3>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {otherProjects.map((p, i) => {
-              const phaseLabel = getClientPhaseLabel(p.supervisor_phase);
-              const isDelivered = p.supervisor_phase === "delivered" || p.status === "completed";
-              return (
-                <motion.div
-                  key={p.id}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.03 }}
-                  onClick={() => onOpen(p.id)}
-                  className="group cursor-pointer border border-border p-5 transition-all hover:border-foreground"
+      ) : sorted.length === 0 ? (
+        <div className="text-center py-16">
+          <p className="text-sm text-muted-foreground">
+            {tab === "actions"
+              ? "Aucune action en attente"
+              : tab === "done"
+              ? "Aucun projet termin\u00e9"
+              : tab === "archived"
+              ? "Aucun projet archiv\u00e9"
+              : "Aucun projet"}
+          </p>
+        </div>
+      ) : (
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {sorted.map((p, i) => {
+            const name = p.client_name || "Nouvelle campagne";
+            const isDelivered = p.supervisor_phase === "delivered" || p.supervisor_phase === "finished" || p.status === "completed";
+            const clientPhaseIdx = getClientPhaseIndex(p.supervisor_phase);
+            const clientProgress = ((clientPhaseIdx + 1) / CLIENT_PHASES.length) * 100;
+            const isHovered = hoveredId === p.id;
+            return (
+              <motion.div
+                key={p.id}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.03 }}
+                onClick={() => onOpen(p.id)}
+                onMouseEnter={() => setHoveredId(p.id)}
+                onMouseLeave={() => setHoveredId(null)}
+                className="group relative border border-border overflow-hidden cursor-pointer transition-all duration-300 hover:border-foreground hover:shadow-lg"
+              >
+                {/* Visual header */}
+                <div
+                  className="relative h-24 overflow-hidden"
+                  style={getProjectBackground(name, p.thumbnail_url)}
                 >
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-sm font-bold text-foreground truncate group-hover:text-accent transition-colors">
-                      {p.client_name || "Nouvelle campagne"}
-                    </h4>
-                    {isDelivered && <CheckCircle2 className="h-3.5 w-3.5 text-foreground/60 shrink-0" />}
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                      {phaseLabel}
+                  {!p.thumbnail_url && (
+                    <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-6xl font-black text-white/10 select-none pointer-events-none tracking-wider">
+                      {getInitials(name)}
                     </span>
-                    <span className="text-[10px] text-muted-foreground">
-                      {new Date(p.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
+                  )}
+                  {p.pending_validation && !isHovered && (
+                    <span
+                      className="absolute top-3 right-3 flex items-center gap-1.5 text-[10px] font-bold text-white px-2.5 py-1 rounded-sm"
+                      style={{ background: "rgba(245,158,11,0.85)", backdropFilter: "blur(4px)" }}
+                    >
+                      <AlertTriangle className="h-3 w-3" />
+                      Action requise
                     </span>
+                  )}
+                  {isDelivered && !p.pending_validation && !isHovered && (
+                    <span
+                      className="absolute top-3 right-3 flex items-center gap-1.5 text-[10px] font-bold text-white px-2.5 py-1 rounded-sm"
+                      style={{ background: "rgba(16,185,129,0.85)", backdropFilter: "blur(4px)" }}
+                    >
+                      <CheckCircle2 className="h-3 w-3" />
+                      Livr\u00e9
+                    </span>
+                  )}
+
+                  {/* ── Hover overlay with action icons ── */}
+                  <motion.div
+                    initial={false}
+                    animate={{ opacity: isHovered ? 1 : 0 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute inset-0 flex items-center justify-center gap-3 pointer-events-none"
+                    style={{ background: "rgba(0,0,0,0.45)", backdropFilter: "blur(2px)" }}
+                  >
+                    <div className={`flex items-center gap-2 ${isHovered ? "pointer-events-auto" : "pointer-events-none"}`}>
+                      {isArchiveTab ? (
+                        <button
+                          onClick={(e) => handleArchive(e, p.id, false)}
+                          className="flex h-9 w-9 items-center justify-center rounded-full bg-white/20 text-white hover:bg-white/40 transition-colors"
+                          title="Restaurer"
+                        >
+                          <ArchiveRestore className="h-4 w-4" />
+                        </button>
+                      ) : (
+                        <button
+                          onClick={(e) => handleArchive(e, p.id, true)}
+                          className="flex h-9 w-9 items-center justify-center rounded-full bg-white/20 text-white hover:bg-white/40 transition-colors"
+                          title="Archiver"
+                        >
+                          <Archive className="h-4 w-4" />
+                        </button>
+                      )}
+                      <button
+                        onClick={(e) => handleShare(e, p.id)}
+                        className="flex h-9 w-9 items-center justify-center rounded-full bg-white/20 text-white hover:bg-white/40 transition-colors"
+                        title="Partager"
+                      >
+                        <Share2 className="h-4 w-4" />
+                      </button>
+                      {isDelivered && (
+                        <button
+                          onClick={(e) => handleDownload(e, p.id, name)}
+                          className="flex h-9 w-9 items-center justify-center rounded-full bg-white/20 text-white hover:bg-white/40 transition-colors"
+                          title="T\u00e9l\u00e9charger le dossier"
+                        >
+                          <Download className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  </motion.div>
+
+                  {/* Progress bar at bottom of visual */}
+                  <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/10">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${clientProgress}%` }}
+                      transition={{ duration: 0.6, delay: i * 0.03 + 0.15, ease: "easeOut" }}
+                      className="h-full bg-white/70"
+                    />
                   </div>
-                </motion.div>
-              );
-            })}
-          </div>
+                </div>
+                {/* Content */}
+                <div className="px-4 py-3.5">
+                  <h3 className="text-sm font-bold text-foreground group-hover:text-accent transition-colors truncate">
+                    {name}
+                  </h3>
+                  <div className="mt-2 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-medium text-muted-foreground">
+                        {getClientPhaseLabel(p.supervisor_phase)}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground/50">·</span>
+                      <span className="text-[10px] text-muted-foreground/70">
+                        {timeAgo(p.updated_at)}
+                      </span>
+                    </div>
+                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/30 group-hover:text-foreground transition-colors" />
+                  </div>
+                </div>
+              </motion.div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -415,6 +656,7 @@ const Projects = () => {
             creating={creating}
             onNew={handleNew}
             onOpen={(id) => navigate(`/project/${id}`)}
+            onRefresh={loadProjects}
             userName={user?.full_name || user?.email || null}
           />
         </main>
@@ -525,11 +767,11 @@ const Projects = () => {
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {[0, 1, 2, 3, 4, 5].map((i) => (
               <div key={i} className="border border-border overflow-hidden">
-                <Skeleton className="h-2 w-full rounded-none" />
-                <div className="p-6 space-y-4">
-                  <Skeleton className="h-3 w-20" />
-                  <Skeleton className="h-6 w-40" />
+                <Skeleton className="h-28 w-full rounded-none" />
+                <div className="p-5 space-y-3">
+                  <Skeleton className="h-5 w-40" />
                   <Skeleton className="h-3 w-24" />
+                  <Skeleton className="h-1 w-full" />
                 </div>
               </div>
             ))}
@@ -611,43 +853,54 @@ const Projects = () => {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.04 }}
                   onClick={() => navigate(`/project/${p.id}`)}
-                  className="group border border-border overflow-hidden cursor-pointer transition-all duration-300 hover:border-foreground"
+                  className="group border border-border overflow-hidden cursor-pointer transition-all duration-300 hover:border-foreground hover:shadow-lg"
                 >
-                  <div className="h-1 w-full bg-secondary">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${progress}%` }}
-                      transition={{ duration: 0.8, delay: i * 0.04 + 0.2, ease: "easeOut" }}
-                      className="h-full bg-foreground"
-                    />
-                  </div>
-                  <div className="p-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                        {getPhaseLabel(p.supervisor_phase)}
+                  {/* Visual header */}
+                  <div
+                    className="relative h-28 flex items-end p-4 overflow-hidden"
+                    style={getProjectBackground(name, p.thumbnail_url)}
+                  >
+                    {!p.thumbnail_url && (
+                      <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-7xl font-black text-white/20 select-none pointer-events-none">
+                        {getInitials(name)}
                       </span>
-                      <div className="flex items-center gap-2">
-                        {p.pending_validation && (
-                          <span className="flex items-center gap-1 text-[10px] font-bold text-accent">
-                            <AlertTriangle className="h-3 w-3" />
-                            Action
-                          </span>
-                        )}
-                        <span className={`flex items-center gap-1 text-[10px] font-bold ${sc.color}`}>
-                          {sc.icon} {sc.label}
-                        </span>
-                      </div>
-                    </div>
-                    <h3 className="text-lg font-bold text-foreground group-hover:text-accent transition-colors">
+                    )}
+                    {p.pending_validation && (
+                      <span className="absolute top-3 right-3 flex items-center gap-1.5 text-[10px] font-bold text-white px-2.5 py-1"
+                        style={{ background: "rgba(0,0,0,0.3)", backdropFilter: "blur(4px)" }}
+                      >
+                        <AlertTriangle className="h-3 w-3" />
+                        Action requise
+                      </span>
+                    )}
+                    <span
+                      className="relative text-[10px] font-bold uppercase tracking-wider text-white/90 px-2 py-0.5"
+                      style={{ background: "rgba(0,0,0,0.2)", backdropFilter: "blur(4px)" }}
+                    >
+                      {getPhaseLabel(p.supervisor_phase)}
+                    </span>
+                  </div>
+                  {/* Content */}
+                  <div className="p-5">
+                    <h3 className="text-base font-bold text-foreground group-hover:text-accent transition-colors truncate">
                       {name}
                     </h3>
-                    <p className="mt-2 text-xs text-muted-foreground font-medium">
-                      {new Date(p.created_at).toLocaleDateString("fr-FR", {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      })}
-                    </p>
+                    <div className="mt-3 flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">
+                        {timeAgo(p.updated_at)}
+                      </span>
+                      <span className={`flex items-center gap-1 text-[10px] font-bold ${sc.color}`}>
+                        {sc.icon} {sc.label}
+                      </span>
+                    </div>
+                    <div className="mt-3 h-1 w-full bg-secondary">
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${progress}%` }}
+                        transition={{ duration: 0.8, delay: i * 0.04 + 0.2, ease: "easeOut" }}
+                        className="h-full bg-foreground"
+                      />
+                    </div>
                   </div>
                 </motion.div>
               );

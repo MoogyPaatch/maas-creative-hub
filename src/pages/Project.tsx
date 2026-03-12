@@ -52,6 +52,7 @@ const PANEL_ONLY_NOTIFS: Record<string, string> = {
 const QR_LABEL_MAP: Record<string, string> = {
   // Welcome
   has_brief: "J'ai un brief",
+  no_brief: "Je n'ai pas de brief",
   vague_idea: "J'ai une idée vague",
   no_idea: "Je ne sais pas par où commencer",
   describe_here: "Je décris ici",
@@ -509,9 +510,20 @@ const ProjectPage = () => {
           toast.info("Vous pouvez uploader vos fichiers dans le panneau de droite");
         }
 
-        if (msg.metadata?.type && msg.metadata.type !== "client_brief_draft" && msg.metadata.type !== "status_update") {
+        // Handle asset_requirements (Epic 41) — highlight missing categories, switch to assets tab, do NOT add to artifacts
+        if (msg.metadata?.type === "asset_requirements") {
+          const cats = msg.metadata?.missing_categories;
+          if (Array.isArray(cats) && cats.length > 0) {
+            setHighlightAssetCategories(cats);
+          }
+          setForceAssetsSignal((prev) => prev + 1);
+          setMobileTab("output");
+          return; // Do not add asset_requirements to artifacts — handled in BrandAssetsPanel
+        }
+
+        if (msg.metadata?.type && msg.metadata.type !== "client_brief_draft" && msg.metadata.type !== "status_update" && msg.metadata.type !== "asset_requirements") {
           // Types that should only have one tab (replace existing on re-emit)
-          const SINGLETON_TYPES = new Set(["validation_required", "campaign_gallery", "dc_presentation", "ppm_presentation", "masters_review"]);
+          const SINGLETON_TYPES = new Set(["validation_required", "campaign_gallery", "dc_presentation", "ppm_presentation", "masters_review", "asset_requirements"]);
           setArtifacts((prev) => {
             if (msg.metadata?.type && SINGLETON_TYPES.has(msg.metadata.type)) {
               const without = prev.filter((a) => a.metadata?.type !== msg.metadata?.type);
@@ -589,7 +601,11 @@ const ProjectPage = () => {
 
   const handleSendMessage = useCallback(async (text: string) => {
     if (!conversationId) return;
-    setMessages((prev) => [...prev, { role: "user", content: text, timestamp: new Date() }]);
+    // Clear any pending quick replies when user types a free-text message
+    setMessages((prev) => [
+      ...prev.map((m) => m.quickReplies ? { ...m, quickReplies: undefined } : m),
+      { role: "user", content: text, timestamp: new Date() },
+    ]);
     try {
       const stream = await sendMessageSSE(conversationId, "text", text);
       await handleSSEStream(stream);
@@ -605,7 +621,13 @@ const ProjectPage = () => {
     if (!conversationId) return;
     const lastAgentMsg = [...messages].reverse().find((m) => m.role === "agent" && m.quickReplies);
     const label = lastAgentMsg?.quickReplies?.find((qr) => qr.id === qrId)?.label || qrId;
-    setMessages((prev) => [...prev, { role: "user", content: label, timestamp: new Date() }]);
+    // Clear quick replies from the clicked message so buttons don't reappear
+    setMessages((prev) => [
+      ...prev.map((m) =>
+        m === lastAgentMsg ? { ...m, quickReplies: undefined } : m
+      ),
+      { role: "user", content: label, timestamp: new Date() },
+    ]);
     try {
       const stream = await sendMessageSSE(conversationId, "quick_reply", qrId);
       await handleSSEStream(stream);
@@ -694,6 +716,18 @@ const ProjectPage = () => {
       await handleSSEStream(stream);
     } catch {
       toast.error("Erreur lors du passage des declinaisons");
+      setIsStreaming(false);
+    }
+  }, [conversationId, handleSSEStream]);
+
+  const handleAssetRequirementsContinue = useCallback(async () => {
+    if (!conversationId) return;
+    try {
+      setMessages((prev) => [...prev, { role: "user", content: "Continuer", timestamp: new Date() }]);
+      const stream = await sendMessageSSE(conversationId, "quick_reply", "continue");
+      await handleSSEStream(stream);
+    } catch {
+      toast.error("Erreur lors du passage de l'etape assets");
       setIsStreaming(false);
     }
   }, [conversationId, handleSSEStream]);
@@ -869,6 +903,7 @@ const ProjectPage = () => {
     projectId: id,
     forceAssetsSignal,
     onAssetUploadComplete: handleAssetUploadComplete,
+    onAssetRequirementsContinue: handleAssetRequirementsContinue,
   };
 
   return (

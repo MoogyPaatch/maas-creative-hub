@@ -246,11 +246,17 @@ function PisteSlide({
           className="px-5 py-4 lg:px-6 space-y-3"
         >
           {/* Core sections */}
-          <Section label="Concept creatif" text={piste.concept} accent />
+          {piste.constat && (
+            <Section label="Constat" text={piste.constat} />
+          )}
+          <Section label="Concept créatif" text={piste.concept} accent />
           <Section label="Direction visuelle" text={piste.tone} />
-          <Section label="Justification strategique" text={piste.justification} />
+          {piste.dispositif && (
+            <Section label="Dispositif d'activation" text={piste.dispositif} />
+          )}
+          <Section label="Justification stratégique" text={piste.justification} />
           {piste.differentiation && (
-            <Section label="Differenciation" text={piste.differentiation} />
+            <Section label="Différenciation" text={piste.differentiation} />
           )}
 
           {/* Video concept — one-line teaser only (full details in PPM) */}

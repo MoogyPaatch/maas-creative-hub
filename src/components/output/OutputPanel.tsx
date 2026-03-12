@@ -11,6 +11,7 @@ import MastersReview from "./MastersReview";
 import ValidationPanel from "./ValidationPanel";
 import BrandAssetsPanel from "./BrandAssetsPanel";
 import DeliveryPanel from "./DeliveryPanel";
+
 import LiveBriefPreview from "./LiveBriefPreview";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import type { ChatMessage, BrandAsset, BrandAssetCategory, ProductionAsset, BriefData, ClientBriefDraft } from "@/types";
@@ -42,6 +43,7 @@ interface Props {
   projectId?: string;
   forceAssetsSignal?: number;
   onAssetUploadComplete?: (filename: string) => void;
+  onAssetRequirementsContinue?: () => void;
 }
 
 function briefToMarkdown(brief: BriefData): string {
@@ -79,7 +81,7 @@ const OutputPanel = ({
   onSelectPiste, onApprove, onReject, onPPMApprove, onLaunchDeclinaisons, onSkipDeclinaisons,
   brandAssets = [], onBrandAssetsChange, highlightAssetCategories,
   showAssetsTab = true, onBriefChange, currentStep, isClientView = false, isStreaming = false, isValidatingBrief = false,
-  projectId, forceAssetsSignal, onAssetUploadComplete,
+  projectId, forceAssetsSignal, onAssetUploadComplete, onAssetRequirementsContinue,
 }: Props) => {
   const agencyOnlyTypes = new Set(["creative_brief", "dc_copy_result"]);
 
@@ -95,6 +97,7 @@ const OutputPanel = ({
     if (a.metadata?.type === "creative_brief" && briefData) return;
     if (isClientView && agencyOnlyTypes.has(a.metadata!.type)) return;
     if (a.metadata?.type === "validation_required") return; // Validation handled in chat, never show tab
+    if (a.metadata?.type === "asset_requirements") return; // Don't create separate tab — handled in BrandAssetsPanel
     displayItems.push({ type: a.metadata!.type, content: a.metadata?.content, metadata: a.metadata });
   });
 
@@ -198,6 +201,7 @@ const OutputPanel = ({
     campaign_gallery: { label: "Campagne", icon: ImageIcon },
     masters_review: { label: "Masters", icon: Package },
     declinaison_configurator: { label: "Declinaisons", icon: Settings2 },
+
     validation_required: { label: "Validation" },
     delivery: { label: "Livraison", icon: Package },
   };
@@ -225,7 +229,7 @@ const OutputPanel = ({
               />
             )}
             {activeTab === "assets" && onBrandAssetsChange && projectId && (
-              <BrandAssetsPanel assets={brandAssets} onAssetsChange={onBrandAssetsChange} highlightCategories={highlightAssetCategories} projectId={projectId} onUploadComplete={onAssetUploadComplete} />
+              <BrandAssetsPanel assets={brandAssets} onAssetsChange={onBrandAssetsChange} highlightCategories={highlightAssetCategories} projectId={projectId} onUploadComplete={onAssetUploadComplete} onContinueProduction={onAssetRequirementsContinue} />
             )}
             {activeTab === "canvas" && hasCanvasTab && (
               <CreativeCanvas assets={galleryAssets} onBack={() => { const idx = displayItems.findIndex(d => d.type === "campaign_gallery"); setActiveTab(idx >= 0 ? idx : 0); }} />
