@@ -420,7 +420,7 @@ function EntityGrid({
                 )}
                 {item.lighting && (
                   <p className="mt-1 text-xs text-muted-foreground">
-                    <span className="font-semibold text-foreground/70">Lumiere :</span> {safe(item.lighting)}
+                    <span className="font-semibold text-foreground/70">Lumière :</span> {safe(item.lighting)}
                   </p>
                 )}
                 {item.time_of_day && (
@@ -641,6 +641,15 @@ function FormatsTab({ metadata, voiceoverEntries }: { metadata: MessageMetadata;
 }
 
 /* ── Summary Tab ── */
+/** Sanitize internal status tokens that may leak into the LLM-generated summary. */
+function sanitizeSummary(raw: string): string {
+  return raw
+    .replace(/PPM\s*[\u2013\u2014\-]+\s*NOTES_DONE/gi, "PPM \u2014 Dossier complet")
+    .replace(/PPM\s*[\u2013\u2014\-]+\s*PRESENTED/gi, "PPM \u2014 Dossier complet")
+    .replace(/NOTES_DONE/g, "Dossier complet")
+    .replace(/STATUS_NOTES_DONE/g, "Dossier complet");
+}
+
 function SummaryTab({ metadata }: { metadata: MessageMetadata }) {
   const videoSpecs = metadata.video_specs as R | undefined;
   const hasSummary = !!metadata.summary;
@@ -651,7 +660,7 @@ function SummaryTab({ metadata }: { metadata: MessageMetadata }) {
   if (!hasSummary && !hasProductionNotes && !hasMockups && !hasStats) {
     return (
       <div className="flex h-full items-center justify-center p-8">
-        <p className="text-sm text-muted-foreground">Aucun resume disponible.</p>
+        <p className="text-sm text-muted-foreground">Aucun résumé disponible.</p>
       </div>
     );
   }
@@ -661,26 +670,26 @@ function SummaryTab({ metadata }: { metadata: MessageMetadata }) {
       {/* Summary text */}
       {hasSummary && (
         <div>
-          <SectionHeader icon={FileText} title="Resume Complet" />
+          <SectionHeader icon={FileText} title="Résumé Complet" />
           <div className="prose prose-sm max-w-none prose-headings:text-foreground prose-p:text-muted-foreground prose-strong:text-foreground prose-li:text-muted-foreground prose-ul:my-1 prose-li:my-0.5">
-            <ReactMarkdown>{metadata.summary!}</ReactMarkdown>
+            <ReactMarkdown>{sanitizeSummary(metadata.summary!)}</ReactMarkdown>
           </div>
         </div>
       )}
 
       {/* Stats overview */}
-      {hasStats && (
+      {!!hasStats && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {metadata.storyboard_count && (
+          {!!metadata.storyboard_count && (
             <InfoChip label="Storyboard" value={`${metadata.storyboard_count} frames`} accent />
           )}
-          {metadata.casting_count && (
+          {!!metadata.casting_count && (
             <InfoChip label="Casting" value={`${metadata.casting_count} roles`} />
           )}
-          {metadata.settings_count && (
-            <InfoChip label="Decors" value={`${metadata.settings_count} lieux`} />
+          {!!metadata.settings_count && (
+            <InfoChip label="Décors" value={`${metadata.settings_count} lieux`} />
           )}
-          {metadata.mockup_count && (
+          {!!metadata.mockup_count && (
             <InfoChip label="Maquettes" value={`${metadata.mockup_count} formats`} />
           )}
         </div>
@@ -934,11 +943,11 @@ const PPMPresentation = ({ metadata, projectId, currentStep, onPPMApprove }: Pro
     t.push({ id: "storyboard", label: "Storyboard", icon: Film, count: storyboard.length || undefined });
     t.push({ id: "casting", label: "Casting", icon: Users, count: characters.length || undefined });
     t.push({ id: "products", label: "Produits", icon: Package, count: products.length || undefined });
-    t.push({ id: "locations", label: "Decors", icon: MapPin, count: locations.length || undefined });
+    t.push({ id: "locations", label: "Décors", icon: MapPin, count: locations.length || undefined });
     if (hasFormats) {
       t.push({ id: "formats", label: "Formats", icon: Layers });
     }
-    t.push({ id: "summary", label: "Resume", icon: FileText });
+    t.push({ id: "summary", label: "Résumé", icon: FileText });
     return t;
   }, [characters.length, products.length, locations.length, storyboard.length, hasFormats]);
 
@@ -965,7 +974,7 @@ const PPMPresentation = ({ metadata, projectId, currentStep, onPPMApprove }: Pro
           <span className="text-sm font-bold text-foreground truncate">
             {projectTitle || "Dossier PPM"}
           </span>
-          <span className="text-xs text-muted-foreground">Pre-Production Meeting</span>
+          <span className="text-xs text-muted-foreground">Pré-Production Meeting</span>
         </div>
         <div className="flex items-center gap-1.5 flex-shrink-0">
           {slidesUrl && (
@@ -1068,8 +1077,8 @@ const PPMPresentation = ({ metadata, projectId, currentStep, onPPMApprove }: Pro
           <EntityGrid
             items={locations}
             icon={MapPin}
-            title="Decors / Lieux"
-            emptyLabel="Aucun decor defini."
+            title="Décors / Lieux"
+            emptyLabel="Aucun décor défini."
             aspectClass="aspect-video"
           />
         )}

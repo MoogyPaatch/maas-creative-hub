@@ -77,12 +77,17 @@ const ChatPanel = ({ messages, thinking, onSendMessage, onQuickReply, onAttach, 
     setShowScrollBtn(scrollHeight - scrollTop - clientHeight > 120);
   }, []);
 
-  const lastQRIndex = useMemo(
-    () => messages.reduce((acc, msg, i) =>
+  const lastQRIndex = useMemo(() => {
+    const idx = messages.reduce((acc, msg, i) =>
       msg.role === "agent" && msg.quickReplies?.length ? i : acc, -1
-    ),
-    [messages]
-  );
+    );
+    // Hide quick replies if the user already responded after that agent message
+    if (idx >= 0) {
+      const hasUserReplyAfter = messages.slice(idx + 1).some((m) => m.role === "user");
+      if (hasUserReplyAfter) return -1;
+    }
+    return idx;
+  }, [messages]);
 
   // Track which messages have a divider after them (only the first transition)
   const dividerAfterIndex = useMemo(() => {
